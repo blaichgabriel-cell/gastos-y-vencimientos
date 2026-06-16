@@ -22,14 +22,16 @@ import {
   ExpenseInput,
   ExpenseStatus,
   formatCurrency,
+  formatGuaraniInput,
   getComputedStatus,
+  parseGuaraniAmount,
   statusLabels
 } from "@/lib/expenses";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase/client";
 
 const defaultForm: ExpenseInput = {
   title: "",
-  amount: 0,
+  amount: "",
   category: "Servicios",
   due_date: new Date().toISOString().slice(0, 10),
   recurrence: "none",
@@ -109,7 +111,9 @@ export function ExpenseApp() {
       return;
     }
 
-    if (!form.title.trim() || Number(form.amount) <= 0) {
+    const parsedAmount = parseGuaraniAmount(form.amount);
+
+    if (!form.title.trim() || parsedAmount <= 0) {
       setNotice("Completa un nombre y un monto mayor a cero.");
       return;
     }
@@ -119,7 +123,7 @@ export function ExpenseApp() {
     const payload = {
       ...form,
       title: form.title.trim(),
-      amount: Number(form.amount),
+      amount: parsedAmount,
       user_id: userId,
       status: "pending" as ExpenseStatus,
       notes: form.notes.trim() || null,
@@ -152,7 +156,7 @@ export function ExpenseApp() {
     setEditingId(expense.id);
     setForm({
       title: expense.title,
-      amount: Number(expense.amount),
+      amount: formatGuaraniInput(Number(expense.amount)),
       category: expense.category,
       due_date: expense.due_date,
       recurrence: expense.recurrence,
@@ -382,7 +386,7 @@ export function ExpenseApp() {
               </div>
               <form className="executive-form" onSubmit={saveExpense}>
                 <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
-                <label>Monto<input value={form.amount || ""} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} min="1" type="number" required /></label>
+                <label>Monto<input inputMode="numeric" placeholder="380.000" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
                 <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
                 <label>Vencimiento<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
                 <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
