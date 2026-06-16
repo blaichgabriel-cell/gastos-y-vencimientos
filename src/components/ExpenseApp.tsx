@@ -314,6 +314,7 @@ export function ExpenseApp() {
   }
 
   const overdueCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "overdue").length;
+  const dueTodayCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "due_today").length;
   const nextExpenses = periodExpenses
     .filter((expense) => {
       if (getTransactionType(expense) === "income") return false;
@@ -321,6 +322,7 @@ export function ExpenseApp() {
       return computed === "due_today" || computed === "upcoming" || computed === "overdue";
     })
     .slice(0, activeView === "alertas" ? 20 : 5);
+  const hasPaymentAlerts = overdueCount > 0 || dueTodayCount > 0 || summary.upcoming > 0;
 
   const viewCopy = {
     panel: "Resumen financiero del mes seleccionado.",
@@ -443,6 +445,24 @@ export function ExpenseApp() {
         </section>
 
         {notice ? <p className="notice executive-notice">{notice}</p> : null}
+
+        {hasPaymentAlerts ? (
+          <section className={`internal-alert ${overdueCount > 0 ? "danger" : dueTodayCount > 0 ? "today" : "upcoming"}`}>
+            <div>
+              <strong>
+                {overdueCount > 0
+                  ? `Tenes ${overdueCount} pago${overdueCount === 1 ? "" : "s"} vencido${overdueCount === 1 ? "" : "s"}`
+                  : dueTodayCount > 0
+                    ? `Tenes ${dueTodayCount} pago${dueTodayCount === 1 ? "" : "s"} que vence${dueTodayCount === 1 ? "" : "n"} hoy`
+                    : `Tenes ${summary.upcoming} pago${summary.upcoming === 1 ? "" : "s"} proximo${summary.upcoming === 1 ? "" : "s"}`}
+              </strong>
+              <span>Revisa tus vencimientos para evitar atrasos.</span>
+            </div>
+            <button onClick={() => setActiveView("alertas")} type="button">
+              Ver alertas
+            </button>
+          </section>
+        ) : null}
 
         <section className={`executive-content view-${activeView}`}>
           {(activeView === "panel" || activeView === "vencimientos") ? (
