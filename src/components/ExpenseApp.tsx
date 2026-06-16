@@ -70,6 +70,7 @@ export function ExpenseApp() {
   const [status, setStatus] = useState<"all" | ExpenseStatus>("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
+  const [activeView, setActiveView] = useState<"panel" | "vencimientos" | "alertas">("panel");
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -237,9 +238,15 @@ export function ExpenseApp() {
           </div>
         </div>
         <nav className="side-nav" aria-label="Principal">
-          <a className="active" href="#resumen"><WalletCards size={18} /> Panel ejecutivo</a>
-          <a href="#vencimientos"><CalendarDays size={18} /> Vencimientos</a>
-          <a href="#alertas"><AlertTriangle size={18} /> Alertas</a>
+          <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
+            <WalletCards size={18} /> Panel ejecutivo
+          </button>
+          <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
+            <CalendarDays size={18} /> Vencimientos
+          </button>
+          <button className={activeView === "alertas" ? "active" : ""} onClick={() => setActiveView("alertas")} type="button">
+            <AlertTriangle size={18} /> Alertas
+          </button>
         </nav>
         <div className="side-account">
           <small>Cuenta</small>
@@ -319,7 +326,8 @@ export function ExpenseApp() {
 
         {notice ? <p className="notice executive-notice">{notice}</p> : null}
 
-        <section className="executive-content">
+        <section className={`executive-content view-${activeView}`}>
+          {(activeView === "panel" || activeView === "vencimientos") ? (
           <article className="executive-card table-card" id="vencimientos">
             <div className="card-heading">
               <div>
@@ -367,7 +375,9 @@ export function ExpenseApp() {
               })}
             </div>
           </article>
+          ) : null}
 
+          {(activeView === "panel" || activeView === "alertas") ? (
           <aside className="executive-card right-card" id="alertas">
             <div className="card-heading">
               <div>
@@ -389,6 +399,7 @@ export function ExpenseApp() {
               })}
             </div>
           </aside>
+          ) : null}
         </section>
 
         {showForm ? (
@@ -417,9 +428,13 @@ export function ExpenseApp() {
         ) : null}
 
         <nav className="mobile-nav" aria-label="Navegacion movil">
-          <a href="#resumen"><WalletCards size={18} /> Panel</a>
+          <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
+            <WalletCards size={18} /> Panel
+          </button>
           <button onClick={() => setShowForm(true)} type="button"><Plus size={18} /> Agregar</button>
-          <a href="#alertas"><Bell size={18} /> Alertas</a>
+          <button className={activeView === "alertas" ? "active" : ""} onClick={() => setActiveView("alertas")} type="button">
+            <Bell size={18} /> Alertas
+          </button>
         </nav>
       </section>
     </main>

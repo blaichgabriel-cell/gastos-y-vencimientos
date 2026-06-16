@@ -922,6 +922,7 @@ textarea {
 }
 
 .side-nav a,
+.side-nav button,
 .side-account button {
   display: flex;
   align-items: center;
@@ -933,12 +934,18 @@ textarea {
   text-decoration: none;
 }
 
-.side-nav a {
+.side-nav a,
+.side-nav button {
+  width: 100%;
+  border: 0;
   padding: 0 12px;
+  background: transparent;
 }
 
 .side-nav a.active,
-.side-nav a:hover {
+.side-nav a:hover,
+.side-nav button.active,
+.side-nav button:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
@@ -1026,7 +1033,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  background: linear-gradient(135deg, #10201f, #0f766e);
+  background: linear-gradient(135deg, #111827, #1e3a46);
   color: #fff;
   padding: 22px;
 }
@@ -1113,6 +1120,11 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 12px;
+}
+
+.executive-content.view-vencimientos,
+.executive-content.view-alertas {
+  grid-template-columns: 1fr;
 }
 
 .executive-card {
@@ -1361,6 +1373,11 @@ textarea {
   }
 
   .mobile-nav button {
+    color: #334155;
+  }
+
+  .mobile-nav button:nth-child(2),
+  .mobile-nav button.active {
     background: #0f766e;
     color: #fff;
   }
