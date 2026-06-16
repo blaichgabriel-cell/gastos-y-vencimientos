@@ -18,7 +18,7 @@ export type Expense = {
 
 export type ExpenseInput = {
   title: string;
-  amount: number;
+  amount: string;
   category: string;
   due_date: string;
   recurrence: ExpenseRecurrence;
@@ -56,9 +56,23 @@ export const categories = [
   "Servicios",
   "Tarjeta",
   "Prestamo",
+  "Facultad",
+  "Educacion",
+  "Internet",
+  "Celular",
+  "Luz",
+  "Agua",
+  "Seguro",
+  "Impuestos",
+  "Supermercado",
   "Comida",
   "Transporte",
   "Salud",
+  "Casa",
+  "Suscripciones",
+  "Ropa",
+  "Ahorro",
+  "Inversion",
   "Ocio",
   "Otro"
 ];
@@ -67,6 +81,19 @@ export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("es-PY", {
     style: "currency",
     currency: "PYG",
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
+export function parseGuaraniAmount(value: string) {
+  const digitsOnly = value.replace(/\D/g, "");
+  return digitsOnly ? Number(digitsOnly) : 0;
+}
+
+export function formatGuaraniInput(value: string | number) {
+  const amount = typeof value === "number" ? value : parseGuaraniAmount(value);
+  if (!amount) return "";
+  return new Intl.NumberFormat("es-PY", {
     maximumFractionDigits: 0
   }).format(amount);
 }

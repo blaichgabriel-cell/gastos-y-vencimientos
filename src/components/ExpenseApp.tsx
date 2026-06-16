@@ -96,19 +96,24 @@ export function ExpenseApp() {
     setLoading(false);
   }
 
-  const filtered = useMemo(() => {
+  const periodExpenses = useMemo(() => {
     return expenses.filter((expense) => {
-      const computed = getComputedStatus(expense);
       return (
         expense.due_date.startsWith(month) &&
-        (status === "all" || computed === status) &&
         (category === "all" || expense.category === category)
       );
     });
-  }, [expenses, month, status, category]);
+  }, [expenses, month, category]);
+
+  const filtered = useMemo(() => {
+    return periodExpenses.filter((expense) => {
+      const computed = getComputedStatus(expense);
+      return status === "all" || computed === status;
+    });
+  }, [periodExpenses, status]);
 
   const summary = useMemo(() => {
-    return filtered.reduce(
+    return periodExpenses.reduce(
       (acc, expense) => {
         const computed = getComputedStatus(expense);
         if (computed === "paid") acc.paid += Number(expense.amount);
@@ -118,7 +123,7 @@ export function ExpenseApp() {
       },
       { pending: 0, paid: 0, upcoming: 0 }
     );
-  }, [filtered]);
+  }, [periodExpenses]);
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
@@ -219,13 +224,19 @@ export function ExpenseApp() {
     router.replace("/auth");
   }
 
-  const overdueCount = filtered.filter((expense) => getComputedStatus(expense) === "overdue").length;
-  const nextExpenses = filtered
+  const overdueCount = periodExpenses.filter((expense) => getComputedStatus(expense) === "overdue").length;
+  const nextExpenses = periodExpenses
     .filter((expense) => {
       const computed = getComputedStatus(expense);
       return computed === "due_today" || computed === "upcoming" || computed === "overdue";
     })
-    .slice(0, 5);
+    .slice(0, activeView === "alertas" ? 20 : 5);
+
+  const viewCopy = {
+    panel: "Resumen financiero del mes seleccionado.",
+    vencimientos: "Gestiona tus pagos, estados y fechas.",
+    alertas: "Prioridad de vencimientos cercanos o atrasados."
+  };
 
   return (
     <main className="executive-shell">
@@ -260,6 +271,7 @@ export function ExpenseApp() {
           <div>
             <p className="eyebrow">Panel ejecutivo</p>
             <h1>Mis Gastos</h1>
+            <span className="view-subtitle">{viewCopy[activeView]}</span>
           </div>
           <div className="executive-actions">
             <button className="icon-button" onClick={enableNotifications} title="Activar notificaciones" type="button">
@@ -276,7 +288,7 @@ export function ExpenseApp() {
             <div>
               <span>Pendiente del mes</span>
               <strong>{formatCurrency(summary.pending)}</strong>
-              <small>{filtered.length} gastos filtrados</small>
+              <small>{periodExpenses.length} gastos del mes seleccionado</small>
             </div>
             <div className="balance-ring">
               <b>{overdueCount}</b>
@@ -393,7 +405,9 @@ export function ExpenseApp() {
                   <div className={`due-item ${computed}`} key={expense.id}>
                     <span>{statusLabels[computed]}</span>
                     <strong>{expense.title}</strong>
-                    <small>{formatCurrency(Number(expense.amount))}</small>
+                    <small>
+                      {formatCurrency(Number(expense.amount))} / {new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}
+                    </small>
                   </div>
                 );
               })}
@@ -430,6 +444,9 @@ export function ExpenseApp() {
         <nav className="mobile-nav" aria-label="Navegacion movil">
           <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
             <WalletCards size={18} /> Panel
+          </button>
+          <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
+            <CalendarDays size={18} /> Vence
           </button>
           <button onClick={() => setShowForm(true)} type="button"><Plus size={18} /> Agregar</button>
           <button className={activeView === "alertas" ? "active" : ""} onClick={() => setActiveView("alertas")} type="button">
