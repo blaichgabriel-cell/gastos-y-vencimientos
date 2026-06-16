@@ -2,7 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Edit2, Filter, LogOut, Plus, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Bell,
+  CalendarDays,
+  Check,
+  Edit2,
+  Filter,
+  LogOut,
+  Plus,
+  Trash2,
+  WalletCards,
+  X
+} from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import {
   categories,
@@ -57,6 +69,7 @@ export function ExpenseApp() {
   async function loadExpenses() {
     setLoading(true);
     const { data, error } = await supabase.from("expenses").select("*").order("due_date", { ascending: true });
+    if (error) setNotice(`No se pudieron cargar los gastos: ${error.message}`);
     if (!error && data) setExpenses(data as Expense[]);
     setLoading(false);
   }
@@ -87,31 +100,52 @@ export function ExpenseApp() {
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
-    if (!session) return;
+    setNotice("");
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const userId = userData.user?.id ?? session?.user.id;
+
+    if (userError || !userId) {
+      setNotice("Tu sesion no esta activa. Cerra sesion y volve a entrar.");
+      return;
+    }
+
+    if (!form.title.trim() || Number(form.amount) <= 0) {
+      setNotice("Completa un nombre y un monto mayor a cero.");
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
       ...form,
+      title: form.title.trim(),
       amount: Number(form.amount),
-      user_id: session.user.id,
+      user_id: userId,
       status: "pending" as ExpenseStatus,
+      notes: form.notes.trim() || null,
       updated_at: new Date().toISOString()
     };
 
     const result = editingId
-      ? await supabase.from("expenses").update(payload).eq("id", editingId)
-      : await supabase.from("expenses").insert(payload);
+      ? await supabase.from("expenses").update(payload).eq("id", editingId).select("*").single()
+      : await supabase.from("expenses").insert(payload).select("*").single();
 
     setSaving(false);
     if (result.error) {
-      setNotice(result.error.message);
+      setNotice(`No se pudo guardar: ${result.error.message}`);
       return;
     }
 
+    const savedExpense = result.data as Expense;
+    setExpenses((current) => {
+      const withoutEdited = current.filter((expense) => expense.id !== savedExpense.id);
+      return [...withoutEdited, savedExpense].sort((a, b) => a.due_date.localeCompare(b.due_date));
+    });
+    setMonth(savedExpense.due_date.slice(0, 7));
     setForm(defaultForm);
     setEditingId(null);
     setShowForm(false);
-    await loadExpenses();
+    setNotice(editingId ? "Gasto actualizado." : "Gasto guardado.");
   }
 
   function startEdit(expense: Expense) {
@@ -162,13 +196,14 @@ export function ExpenseApp() {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
+    <main className="money-shell">
+      <header className="money-header">
         <div>
-          <p className="eyebrow">Mi mes</p>
-          <h1>Gastos</h1>
+          <p className="eyebrow">Panel mensual</p>
+          <h1>Mis gastos</h1>
+          <span>{session?.user.email}</span>
         </div>
-        <div className="top-actions">
+        <div className="money-actions">
           <button className="icon-button" onClick={enableNotifications} title="Activar notificaciones" type="button">
             <Bell size={20} />
           </button>
@@ -178,22 +213,36 @@ export function ExpenseApp() {
         </div>
       </header>
 
-      <section className="summary-grid">
-        <article>
-          <span>Pendiente</span>
+      <section className="money-hero">
+        <div>
+          <span>Total pendiente</span>
           <strong>{formatCurrency(summary.pending)}</strong>
-        </article>
+          <small>{filtered.length} movimientos en el mes seleccionado</small>
+        </div>
+        <button className="hero-add" onClick={() => setShowForm(true)} type="button">
+          <Plus size={20} /> Nuevo gasto
+        </button>
+      </section>
+
+      <section className="metric-row">
         <article>
+          <WalletCards size={20} />
           <span>Pagado</span>
           <strong>{formatCurrency(summary.paid)}</strong>
         </article>
         <article>
-          <span>Proximos</span>
+          <CalendarDays size={20} />
+          <span>Por vencer</span>
           <strong>{summary.upcoming}</strong>
+        </article>
+        <article>
+          <AlertTriangle size={20} />
+          <span>Vencidos</span>
+          <strong>{filtered.filter((expense) => getComputedStatus(expense) === "overdue").length}</strong>
         </article>
       </section>
 
-      <section className="toolbar">
+      <section className="control-panel">
         <label>
           Mes
           <input value={month} onChange={(event) => setMonth(event.target.value)} type="month" />
@@ -211,60 +260,130 @@ export function ExpenseApp() {
           Categoria
           <select value={category} onChange={(event) => setCategory(event.target.value)}>
             <option value="all">Todas</option>
-            {categories.map((item) => <option key={item}>{item}</option>)}
+            {categories.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
           </select>
         </label>
       </section>
 
-      <button className="add-button" onClick={() => setShowForm(true)} type="button">
-        <Plus size={20} /> Agregar gasto
-      </button>
-
       {showForm ? (
-        <section className="drawer">
-          <div className="drawer-heading">
-            <h2>{editingId ? "Editar gasto" : "Nuevo gasto"}</h2>
-            <button className="icon-button" onClick={() => setShowForm(false)} type="button"><X size={20} /></button>
+        <section className="form-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">{editingId ? "Actualizacion" : "Carga rapida"}</p>
+              <h2>{editingId ? "Editar gasto" : "Nuevo gasto"}</h2>
+            </div>
+            <button className="icon-button" onClick={() => setShowForm(false)} type="button">
+              <X size={20} />
+            </button>
           </div>
-          <form className="expense-form" onSubmit={saveExpense}>
-            <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
-            <label>Monto<input value={form.amount || ""} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} min="1" type="number" required /></label>
-            <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Vencimiento<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
-            <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
-            <label className="full">Notas<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></label>
-            <button className="primary-button full" disabled={saving} type="submit">{saving ? "Guardando..." : "Guardar"}</button>
+          <form className="expense-form refined" onSubmit={saveExpense}>
+            <label>
+              Nombre
+              <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            </label>
+            <label>
+              Monto
+              <input
+                value={form.amount || ""}
+                onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+                min="1"
+                type="number"
+                required
+              />
+            </label>
+            <label>
+              Categoria
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                {categories.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Vencimiento
+              <input
+                value={form.due_date}
+                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+                type="date"
+                required
+              />
+            </label>
+            <label>
+              Repeticion
+              <select
+                value={form.recurrence}
+                onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}
+              >
+                <option value="none">Unico</option>
+                <option value="monthly">Mensual</option>
+              </select>
+            </label>
+            <label className="full">
+              Notas
+              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+            </label>
+            <button className="primary-button full" disabled={saving} type="submit">
+              {saving ? "Guardando..." : "Guardar gasto"}
+            </button>
           </form>
         </section>
       ) : null}
 
       {notice ? <p className="notice">{notice}</p> : null}
 
-      <section className="expense-list" aria-live="polite">
+      <section className="list-panel" aria-live="polite">
+        <div className="panel-title">
+          <div>
+            <p className="eyebrow">Movimientos</p>
+            <h2>Vencimientos</h2>
+          </div>
+          <button className="small-action" onClick={() => setShowForm(true)} type="button">
+            <Plus size={16} /> Agregar
+          </button>
+        </div>
+
         {loading ? <p className="empty-state">Cargando gastos...</p> : null}
-        {!loading && filtered.length === 0 ? <p className="empty-state"><Filter size={18} /> No hay gastos con estos filtros.</p> : null}
-        {filtered.map((expense) => {
-          const computed = getComputedStatus(expense);
-          return (
-            <article className={`expense-item ${computed}`} key={expense.id}>
-              <button className="check-button" onClick={() => togglePaid(expense)} title="Marcar pagado" type="button">
-                <Check size={18} />
-              </button>
-              <div className="expense-main">
-                <div>
-                  <h3>{expense.title}</h3>
-                  <span>{expense.category} · {new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}</span>
+        {!loading && filtered.length === 0 ? (
+          <p className="empty-state">
+            <Filter size={18} /> No hay gastos con estos filtros.
+          </p>
+        ) : null}
+
+        <div className="expense-stack">
+          {filtered.map((expense) => {
+            const computed = getComputedStatus(expense);
+            return (
+              <article className={`money-item ${computed}`} key={expense.id}>
+                <button className="paid-toggle" onClick={() => togglePaid(expense)} title="Marcar pagado" type="button">
+                  <Check size={18} />
+                </button>
+                <div className="money-info">
+                  <div>
+                    <h3>{expense.title}</h3>
+                    <span>
+                      {expense.category} / {new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}
+                    </span>
+                  </div>
+                  <strong>{formatCurrency(Number(expense.amount))}</strong>
                 </div>
-                <strong>{formatCurrency(Number(expense.amount))}</strong>
-              </div>
-              <span className="status-pill">{statusLabels[computed]}</span>
-              <div className="row-actions">
-                <button className="icon-button" onClick={() => startEdit(expense)} title="Editar" type="button"><Edit2 size={18} /></button>
-                <button className="icon-button danger" onClick={() => deleteExpense(expense.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
-              </div>
-            </article>
-          );
-        })}
+                <div className="money-meta">
+                  <span className="status-pill">{statusLabels[computed]}</span>
+                  {expense.recurrence === "monthly" ? <span className="repeat-pill">Mensual</span> : null}
+                </div>
+                <div className="row-actions">
+                  <button className="icon-button" onClick={() => startEdit(expense)} title="Editar" type="button">
+                    <Edit2 size={18} />
+                  </button>
+                  <button className="icon-button danger" onClick={() => deleteExpense(expense.id)} title="Eliminar" type="button">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </section>
     </main>
   );
