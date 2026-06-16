@@ -51,15 +51,17 @@ function formatGuaraniInput(value: string | number) {
   }).format(amount);
 }
 
-const defaultForm: ExpenseForm = {
-  title: "",
-  amount: "",
-  transaction_type: "expense",
-  category: "Servicios",
-  due_date: new Date().toISOString().slice(0, 10),
-  recurrence: "none",
-  notes: ""
-};
+function createDefaultForm(): ExpenseForm {
+  return {
+    title: "",
+    amount: "",
+    transaction_type: "expense",
+    category: "Servicios",
+    due_date: new Date().toISOString().slice(0, 10),
+    recurrence: "none",
+    notes: ""
+  };
+}
 
 function sortExpenses(items: Expense[]) {
   return [...items].sort((a, b) => {
@@ -81,7 +83,7 @@ export function ExpenseApp() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState<ExpenseForm>(() => createDefaultForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -213,7 +215,7 @@ export function ExpenseApp() {
       return sortExpenses([...withoutEdited, savedExpense]);
     });
     setMonth(savedExpense.due_date.slice(0, 7));
-    setForm(defaultForm);
+    setForm(createDefaultForm());
     setEditingId(null);
     setShowForm(false);
     setNotice(editingId ? "Gasto actualizado." : "Gasto guardado.");
@@ -221,13 +223,13 @@ export function ExpenseApp() {
 
   function openCreateForm() {
     setEditingId(null);
-    setForm(defaultForm);
+    setForm(createDefaultForm());
     setShowForm(true);
   }
 
   function closeForm() {
     setEditingId(null);
-    setForm(defaultForm);
+    setForm(createDefaultForm());
     setShowForm(false);
   }
 
@@ -493,7 +495,7 @@ export function ExpenseApp() {
 
         {showForm ? (
           <section className="executive-modal" role="dialog" aria-modal="true" aria-label="Formulario de gasto">
-            <div className="executive-form-card">
+            <div className="executive-form-card" key={editingId ?? "new-movement"}>
               <div className="card-heading">
                 <div>
                   <p className="eyebrow">{editingId ? "Actualizacion" : "Nuevo registro"}</p>
@@ -503,10 +505,10 @@ export function ExpenseApp() {
                   <X size={20} />
                 </button>
               </div>
-              <form className="executive-form" onSubmit={saveExpense}>
+              <form className="executive-form" onSubmit={saveExpense} autoComplete="off">
                 <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
                 <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
-                <label>Monto<input inputMode="numeric" placeholder="380.000" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
+                <label>Monto<input autoComplete="off" inputMode="numeric" name="movement_amount" placeholder="0" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
                 <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{(form.transaction_type === "income" ? incomeCategories : categories).map((item) => <option key={item}>{item}</option>)}</select></label>
                 <label>{form.transaction_type === "income" ? "Fecha" : "Vencimiento"}<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
                 <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
