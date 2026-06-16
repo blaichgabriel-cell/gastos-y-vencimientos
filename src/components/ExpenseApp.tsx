@@ -19,17 +19,36 @@ import type { Session } from "@supabase/supabase-js";
 import {
   categories,
   Expense,
-  ExpenseInput,
   ExpenseStatus,
   formatCurrency,
-  formatGuaraniInput,
   getComputedStatus,
-  parseGuaraniAmount,
   statusLabels
 } from "@/lib/expenses";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase/client";
 
-const defaultForm: ExpenseInput = {
+type ExpenseForm = {
+  title: string;
+  amount: string;
+  category: string;
+  due_date: string;
+  recurrence: "none" | "monthly";
+  notes: string;
+};
+
+function parseGuaraniAmount(value: string) {
+  const digitsOnly = value.replace(/\D/g, "");
+  return digitsOnly ? Number(digitsOnly) : 0;
+}
+
+function formatGuaraniInput(value: string | number) {
+  const amount = typeof value === "number" ? value : parseGuaraniAmount(value);
+  if (!amount) return "";
+  return new Intl.NumberFormat("es-PY", {
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
+const defaultForm: ExpenseForm = {
   title: "",
   amount: "",
   category: "Servicios",
