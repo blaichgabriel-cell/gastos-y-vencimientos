@@ -195,195 +195,209 @@ export function ExpenseApp() {
     router.replace("/auth");
   }
 
+  const overdueCount = filtered.filter((expense) => getComputedStatus(expense) === "overdue").length;
+  const nextExpenses = filtered
+    .filter((expense) => {
+      const computed = getComputedStatus(expense);
+      return computed === "due_today" || computed === "upcoming" || computed === "overdue";
+    })
+    .slice(0, 5);
+
   return (
-    <main className="money-shell">
-      <header className="money-header">
-        <div>
-          <p className="eyebrow">Panel mensual</p>
-          <h1>Mis gastos</h1>
-          <span>{session?.user.email}</span>
-        </div>
-        <div className="money-actions">
-          <button className="icon-button" onClick={enableNotifications} title="Activar notificaciones" type="button">
-            <Bell size={20} />
-          </button>
-          <button className="icon-button" onClick={logout} title="Cerrar sesion" type="button">
-            <LogOut size={20} />
-          </button>
-        </div>
-      </header>
-
-      <section className="money-hero">
-        <div>
-          <span>Total pendiente</span>
-          <strong>{formatCurrency(summary.pending)}</strong>
-          <small>{filtered.length} movimientos en el mes seleccionado</small>
-        </div>
-        <button className="hero-add" onClick={() => setShowForm(true)} type="button">
-          <Plus size={20} /> Nuevo gasto
-        </button>
-      </section>
-
-      <section className="metric-row">
-        <article>
-          <WalletCards size={20} />
-          <span>Pagado</span>
-          <strong>{formatCurrency(summary.paid)}</strong>
-        </article>
-        <article>
-          <CalendarDays size={20} />
-          <span>Por vencer</span>
-          <strong>{summary.upcoming}</strong>
-        </article>
-        <article>
-          <AlertTriangle size={20} />
-          <span>Vencidos</span>
-          <strong>{filtered.filter((expense) => getComputedStatus(expense) === "overdue").length}</strong>
-        </article>
-      </section>
-
-      <section className="control-panel">
-        <label>
-          Mes
-          <input value={month} onChange={(event) => setMonth(event.target.value)} type="month" />
-        </label>
-        <label>
-          Estado
-          <select value={status} onChange={(event) => setStatus(event.target.value as "all" | ExpenseStatus)}>
-            <option value="all">Todos</option>
-            {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Categoria
-          <select value={category} onChange={(event) => setCategory(event.target.value)}>
-            <option value="all">Todas</option>
-            {categories.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-      </section>
-
-      {showForm ? (
-        <section className="form-panel">
-          <div className="panel-title">
-            <div>
-              <p className="eyebrow">{editingId ? "Actualizacion" : "Carga rapida"}</p>
-              <h2>{editingId ? "Editar gasto" : "Nuevo gasto"}</h2>
-            </div>
-            <button className="icon-button" onClick={() => setShowForm(false)} type="button">
-              <X size={20} />
-            </button>
-          </div>
-          <form className="expense-form refined" onSubmit={saveExpense}>
-            <label>
-              Nombre
-              <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-            </label>
-            <label>
-              Monto
-              <input
-                value={form.amount || ""}
-                onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-                min="1"
-                type="number"
-                required
-              />
-            </label>
-            <label>
-              Categoria
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {categories.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Vencimiento
-              <input
-                value={form.due_date}
-                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-                type="date"
-                required
-              />
-            </label>
-            <label>
-              Repeticion
-              <select
-                value={form.recurrence}
-                onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}
-              >
-                <option value="none">Unico</option>
-                <option value="monthly">Mensual</option>
-              </select>
-            </label>
-            <label className="full">
-              Notas
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
-            </label>
-            <button className="primary-button full" disabled={saving} type="submit">
-              {saving ? "Guardando..." : "Guardar gasto"}
-            </button>
-          </form>
-        </section>
-      ) : null}
-
-      {notice ? <p className="notice">{notice}</p> : null}
-
-      <section className="list-panel" aria-live="polite">
-        <div className="panel-title">
+    <main className="executive-shell">
+      <aside className="executive-sidebar">
+        <div className="brand-lockup">
+          <span>MG</span>
           <div>
-            <p className="eyebrow">Movimientos</p>
-            <h2>Vencimientos</h2>
+            <strong>Mis Gastos</strong>
+            <small>Control financiero</small>
           </div>
-          <button className="small-action" onClick={() => setShowForm(true)} type="button">
-            <Plus size={16} /> Agregar
-          </button>
         </div>
+        <nav className="side-nav" aria-label="Principal">
+          <a className="active" href="#resumen"><WalletCards size={18} /> Panel ejecutivo</a>
+          <a href="#vencimientos"><CalendarDays size={18} /> Vencimientos</a>
+          <a href="#alertas"><AlertTriangle size={18} /> Alertas</a>
+        </nav>
+        <div className="side-account">
+          <small>Cuenta</small>
+          <strong>{session?.user.email}</strong>
+          <button onClick={logout} type="button"><LogOut size={16} /> Salir</button>
+        </div>
+      </aside>
 
-        {loading ? <p className="empty-state">Cargando gastos...</p> : null}
-        {!loading && filtered.length === 0 ? (
-          <p className="empty-state">
-            <Filter size={18} /> No hay gastos con estos filtros.
-          </p>
+      <section className="executive-main">
+        <header className="executive-topbar">
+          <div>
+            <p className="eyebrow">Panel ejecutivo</p>
+            <h1>Mis Gastos</h1>
+          </div>
+          <div className="executive-actions">
+            <button className="icon-button" onClick={enableNotifications} title="Activar notificaciones" type="button">
+              <Bell size={20} />
+            </button>
+            <button className="executive-primary" onClick={() => setShowForm(true)} type="button">
+              <Plus size={18} /> Agregar gasto
+            </button>
+          </div>
+        </header>
+
+        <section className="executive-grid" id="resumen">
+          <article className="executive-balance">
+            <div>
+              <span>Pendiente del mes</span>
+              <strong>{formatCurrency(summary.pending)}</strong>
+              <small>{filtered.length} gastos filtrados</small>
+            </div>
+            <div className="balance-ring">
+              <b>{overdueCount}</b>
+              <small>vencidos</small>
+            </div>
+          </article>
+
+          <article className="executive-metric paid">
+            <WalletCards size={20} />
+            <span>Pagado</span>
+            <strong>{formatCurrency(summary.paid)}</strong>
+          </article>
+          <article className="executive-metric upcoming">
+            <CalendarDays size={20} />
+            <span>Proximos</span>
+            <strong>{summary.upcoming}</strong>
+          </article>
+          <article className="executive-metric overdue">
+            <AlertTriangle size={20} />
+            <span>Vencidos</span>
+            <strong>{overdueCount}</strong>
+          </article>
+        </section>
+
+        <section className="executive-filters">
+          <label>
+            Mes
+            <input value={month} onChange={(event) => setMonth(event.target.value)} type="month" />
+          </label>
+          <label>
+            Estado
+            <select value={status} onChange={(event) => setStatus(event.target.value as "all" | ExpenseStatus)}>
+              <option value="all">Todos</option>
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Categoria
+            <select value={category} onChange={(event) => setCategory(event.target.value)}>
+              <option value="all">Todas</option>
+              {categories.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
+        </section>
+
+        {notice ? <p className="notice executive-notice">{notice}</p> : null}
+
+        <section className="executive-content">
+          <article className="executive-card table-card" id="vencimientos">
+            <div className="card-heading">
+              <div>
+                <p className="eyebrow">Movimientos</p>
+                <h2>Gastos y pagos</h2>
+              </div>
+              <button className="small-action" onClick={() => setShowForm(true)} type="button">
+                <Plus size={16} /> Nuevo
+              </button>
+            </div>
+
+            {loading ? <p className="empty-state">Cargando gastos...</p> : null}
+            {!loading && filtered.length === 0 ? (
+              <p className="empty-state"><Filter size={18} /> No hay gastos con estos filtros.</p>
+            ) : null}
+
+            <div className="executive-table">
+              {filtered.map((expense) => {
+                const computed = getComputedStatus(expense);
+                return (
+                  <article className={`executive-row ${computed}`} key={expense.id}>
+                    <button className="paid-toggle" onClick={() => togglePaid(expense)} title="Marcar pagado" type="button">
+                      <Check size={18} />
+                    </button>
+                    <div className="row-title">
+                      <h3>{expense.title}</h3>
+                      <span>{expense.category}</span>
+                    </div>
+                    <strong>{formatCurrency(Number(expense.amount))}</strong>
+                    <span>{new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}</span>
+                    <div className="row-pills">
+                      <span className="status-pill">{statusLabels[computed]}</span>
+                      {expense.recurrence === "monthly" ? <span className="repeat-pill">Mensual</span> : null}
+                    </div>
+                    <div className="row-actions">
+                      <button className="icon-button" onClick={() => startEdit(expense)} title="Editar" type="button">
+                        <Edit2 size={18} />
+                      </button>
+                      <button className="icon-button danger" onClick={() => deleteExpense(expense.id)} title="Eliminar" type="button">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </article>
+
+          <aside className="executive-card right-card" id="alertas">
+            <div className="card-heading">
+              <div>
+                <p className="eyebrow">Prioridad</p>
+                <h2>Proximos vencimientos</h2>
+              </div>
+            </div>
+            <div className="due-stack">
+              {nextExpenses.length === 0 ? <p className="empty-side">Sin alertas para estos filtros.</p> : null}
+              {nextExpenses.map((expense) => {
+                const computed = getComputedStatus(expense);
+                return (
+                  <div className={`due-item ${computed}`} key={expense.id}>
+                    <span>{statusLabels[computed]}</span>
+                    <strong>{expense.title}</strong>
+                    <small>{formatCurrency(Number(expense.amount))}</small>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+        </section>
+
+        {showForm ? (
+          <section className="executive-modal" role="dialog" aria-modal="true" aria-label="Formulario de gasto">
+            <div className="executive-form-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">{editingId ? "Actualizacion" : "Nuevo registro"}</p>
+                  <h2>{editingId ? "Editar gasto" : "Agregar gasto"}</h2>
+                </div>
+                <button className="icon-button" onClick={() => setShowForm(false)} type="button">
+                  <X size={20} />
+                </button>
+              </div>
+              <form className="executive-form" onSubmit={saveExpense}>
+                <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
+                <label>Monto<input value={form.amount || ""} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} min="1" type="number" required /></label>
+                <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
+                <label>Vencimiento<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
+                <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
+                <label className="full">Notas<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></label>
+                <button className="primary-button full" disabled={saving} type="submit">{saving ? "Guardando..." : "Guardar gasto"}</button>
+              </form>
+            </div>
+          </section>
         ) : null}
 
-        <div className="expense-stack">
-          {filtered.map((expense) => {
-            const computed = getComputedStatus(expense);
-            return (
-              <article className={`money-item ${computed}`} key={expense.id}>
-                <button className="paid-toggle" onClick={() => togglePaid(expense)} title="Marcar pagado" type="button">
-                  <Check size={18} />
-                </button>
-                <div className="money-info">
-                  <div>
-                    <h3>{expense.title}</h3>
-                    <span>
-                      {expense.category} / {new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}
-                    </span>
-                  </div>
-                  <strong>{formatCurrency(Number(expense.amount))}</strong>
-                </div>
-                <div className="money-meta">
-                  <span className="status-pill">{statusLabels[computed]}</span>
-                  {expense.recurrence === "monthly" ? <span className="repeat-pill">Mensual</span> : null}
-                </div>
-                <div className="row-actions">
-                  <button className="icon-button" onClick={() => startEdit(expense)} title="Editar" type="button">
-                    <Edit2 size={18} />
-                  </button>
-                  <button className="icon-button danger" onClick={() => deleteExpense(expense.id)} title="Eliminar" type="button">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        <nav className="mobile-nav" aria-label="Navegacion movil">
+          <a href="#resumen"><WalletCards size={18} /> Panel</a>
+          <button onClick={() => setShowForm(true)} type="button"><Plus size={18} /> Agregar</button>
+          <a href="#alertas"><Bell size={18} /> Alertas</a>
+        </nav>
       </section>
     </main>
   );
