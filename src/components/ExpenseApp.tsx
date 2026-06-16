@@ -57,6 +57,18 @@ const defaultForm: ExpenseForm = {
   notes: ""
 };
 
+function sortExpenses(items: Expense[]) {
+  return [...items].sort((a, b) => {
+    const dueCompare = a.due_date.localeCompare(b.due_date);
+    if (dueCompare !== 0) return dueCompare;
+
+    const createdCompare = a.created_at.localeCompare(b.created_at);
+    if (createdCompare !== 0) return createdCompare;
+
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export function ExpenseApp() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -90,9 +102,13 @@ export function ExpenseApp() {
 
   async function loadExpenses() {
     setLoading(true);
-    const { data, error } = await supabase.from("expenses").select("*").order("due_date", { ascending: true });
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*")
+      .order("due_date", { ascending: true })
+      .order("created_at", { ascending: true });
     if (error) setNotice(`No se pudieron cargar los gastos: ${error.message}`);
-    if (!error && data) setExpenses(data as Expense[]);
+    if (!error && data) setExpenses(sortExpenses(data as Expense[]));
     setLoading(false);
   }
 
@@ -168,13 +184,25 @@ export function ExpenseApp() {
     const savedExpense = result.data as Expense;
     setExpenses((current) => {
       const withoutEdited = current.filter((expense) => expense.id !== savedExpense.id);
-      return [...withoutEdited, savedExpense].sort((a, b) => a.due_date.localeCompare(b.due_date));
+      return sortExpenses([...withoutEdited, savedExpense]);
     });
     setMonth(savedExpense.due_date.slice(0, 7));
     setForm(defaultForm);
     setEditingId(null);
     setShowForm(false);
     setNotice(editingId ? "Gasto actualizado." : "Gasto guardado.");
+  }
+
+  function openCreateForm() {
+    setEditingId(null);
+    setForm(defaultForm);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setEditingId(null);
+    setForm(defaultForm);
+    setShowForm(false);
   }
 
   function startEdit(expense: Expense) {
@@ -192,22 +220,28 @@ export function ExpenseApp() {
 
   async function togglePaid(expense: Expense) {
     const isPaid = Boolean(expense.paid_at);
-    const { error } = await supabase
+    const nextPaidAt = isPaid ? null : new Date().toISOString();
+    const nextStatus = isPaid ? "pending" : "paid";
+    const { data, error } = await supabase
       .from("expenses")
       .update({
-        paid_at: isPaid ? null : new Date().toISOString(),
-        status: isPaid ? "pending" : "paid",
+        paid_at: nextPaidAt,
+        status: nextStatus,
         updated_at: new Date().toISOString()
       })
-      .eq("id", expense.id);
+      .eq("id", expense.id)
+      .select("*")
+      .single();
     if (error) setNotice(error.message);
-    else await loadExpenses();
+    else if (data) {
+      setExpenses((current) => sortExpenses(current.map((item) => (item.id === expense.id ? data as Expense : item))));
+    }
   }
 
   async function deleteExpense(id: string) {
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) setNotice(error.message);
-    else await loadExpenses();
+    else setExpenses((current) => current.filter((expense) => expense.id !== id));
   }
 
   async function enableNotifications() {
@@ -277,7 +311,7 @@ export function ExpenseApp() {
             <button className="icon-button" onClick={enableNotifications} title="Activar notificaciones" type="button">
               <Bell size={20} />
             </button>
-            <button className="executive-primary" onClick={() => setShowForm(true)} type="button">
+            <button className="executive-primary" onClick={openCreateForm} type="button">
               <Plus size={18} /> Agregar gasto
             </button>
           </div>
@@ -346,7 +380,7 @@ export function ExpenseApp() {
                 <p className="eyebrow">Movimientos</p>
                 <h2>Gastos y pagos</h2>
               </div>
-              <button className="small-action" onClick={() => setShowForm(true)} type="button">
+              <button className="small-action" onClick={openCreateForm} type="button">
                 <Plus size={16} /> Nuevo
               </button>
             </div>
@@ -424,7 +458,7 @@ export function ExpenseApp() {
                   <p className="eyebrow">{editingId ? "Actualizacion" : "Nuevo registro"}</p>
                   <h2>{editingId ? "Editar gasto" : "Agregar gasto"}</h2>
                 </div>
-                <button className="icon-button" onClick={() => setShowForm(false)} type="button">
+                <button className="icon-button" onClick={closeForm} type="button">
                   <X size={20} />
                 </button>
               </div>
@@ -448,7 +482,7 @@ export function ExpenseApp() {
           <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
             <CalendarDays size={18} /> Vence
           </button>
-          <button onClick={() => setShowForm(true)} type="button"><Plus size={18} /> Agregar</button>
+          <button onClick={openCreateForm} type="button"><Plus size={18} /> Agregar</button>
           <button className={activeView === "alertas" ? "active" : ""} onClick={() => setActiveView("alertas")} type="button">
             <Bell size={18} /> Alertas
           </button>
