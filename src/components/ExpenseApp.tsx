@@ -88,7 +88,7 @@ export function ExpenseApp() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState("all");
   const [transactionFilter, setTransactionFilter] = useState<"all" | "expense" | "income">("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
@@ -131,7 +131,7 @@ export function ExpenseApp() {
     return expenses.filter((expense) => {
       const transactionType = getTransactionType(expense);
       return (
-        expense.due_date.startsWith(month) &&
+        (month === "all" || expense.due_date.startsWith(month)) &&
         (transactionFilter === "all" || transactionType === transactionFilter) &&
         (category === "all" || expense.category === category)
       );
@@ -213,7 +213,7 @@ export function ExpenseApp() {
       const withoutEdited = current.filter((expense) => expense.id !== savedExpense.id);
       return sortExpenses([...withoutEdited, savedExpense]);
     });
-    setMonth(savedExpense.due_date.slice(0, 7));
+    setMonth("all");
     setTransactionFilter("all");
     setCategory("all");
     setForm(createDefaultForm());
@@ -353,6 +353,7 @@ export function ExpenseApp() {
             <div>
               <span>Balance del mes</span>
               <strong>{formatCurrency(balance)}</strong>
+              <small>{periodExpenses.length} visibles de {expenses.length} guardados</small>
               <small>{formatCurrency(summary.income)} ingresos / {formatCurrency(summary.expenses)} gastos</small>
             </div>
             <div className="balance-ring">
@@ -386,7 +387,18 @@ export function ExpenseApp() {
         <section className="executive-filters">
           <label>
             Mes
-            <input value={month} onChange={(event) => setMonth(event.target.value)} type="month" />
+            <select value={month} onChange={(event) => setMonth(event.target.value)}>
+              <option value="all">Todos los meses</option>
+              <option value={new Date().toISOString().slice(0, 7)}>Mes actual</option>
+              {Array.from(new Set(expenses.map((expense) => expense.due_date.slice(0, 7)))).map((item) => (
+                <option key={item} value={item}>
+                  {new Date(`${item}-01T00:00:00`).toLocaleDateString("es-PY", {
+                    month: "long",
+                    year: "numeric"
+                  })}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             Tipo
@@ -422,7 +434,7 @@ export function ExpenseApp() {
 
             {loading ? <p className="empty-state">Cargando gastos...</p> : null}
             {!loading && periodExpenses.length === 0 ? (
-              <p className="empty-state"><Filter size={18} /> No hay movimientos con estos filtros.</p>
+              <p className="empty-state"><Filter size={18} /> No hay movimientos visibles con estos filtros. Hay {expenses.length} movimientos guardados en total.</p>
             ) : null}
 
             <div className="executive-table">
