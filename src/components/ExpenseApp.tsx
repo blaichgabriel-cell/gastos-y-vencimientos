@@ -7,6 +7,7 @@ import {
   Bell,
   CalendarDays,
   Check,
+  CircleDollarSign,
   Edit2,
   Filter,
   LogOut,
@@ -22,6 +23,7 @@ import {
   ExpenseStatus,
   formatCurrency,
   getComputedStatus,
+  incomeCategories,
   statusLabels
 } from "@/lib/expenses";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase/client";
@@ -29,6 +31,7 @@ import { hasSupabaseConfig, supabase } from "@/lib/supabase/client";
 type ExpenseForm = {
   title: string;
   amount: string;
+  transaction_type: "expense" | "income";
   category: string;
   due_date: string;
   recurrence: "none" | "monthly";
@@ -51,6 +54,7 @@ function formatGuaraniInput(value: string | number) {
 const defaultForm: ExpenseForm = {
   title: "",
   amount: "",
+  transaction_type: "expense",
   category: "Servicios",
   due_date: new Date().toISOString().slice(0, 10),
   recurrence: "none",
@@ -67,6 +71,10 @@ function sortExpenses(items: Expense[]) {
 
     return a.id.localeCompare(b.id);
   });
+}
+
+function getTransactionType(expense: Expense) {
+  return expense.transaction_type ?? "expense";
 }
 
 export function ExpenseApp() {
@@ -131,15 +139,24 @@ export function ExpenseApp() {
   const summary = useMemo(() => {
     return periodExpenses.reduce(
       (acc, expense) => {
+        const transactionType = getTransactionType(expense);
+        if (transactionType === "income") {
+          acc.income += Number(expense.amount);
+          return acc;
+        }
+
+        acc.expenses += Number(expense.amount);
         const computed = getComputedStatus(expense);
         if (computed === "paid") acc.paid += Number(expense.amount);
         else acc.pending += Number(expense.amount);
         if (computed === "due_today" || computed === "upcoming") acc.upcoming += 1;
         return acc;
       },
-      { pending: 0, paid: 0, upcoming: 0 }
+      { income: 0, expenses: 0, pending: 0, paid: 0, upcoming: 0 }
     );
   }, [periodExpenses]);
+
+  const balance = summary.income - summary.expenses;
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
@@ -160,13 +177,16 @@ export function ExpenseApp() {
     }
 
     setSaving(true);
+    const nextStatus: ExpenseStatus = form.transaction_type === "income" ? "paid" : "pending";
+    const nextPaidAt = form.transaction_type === "income" ? new Date().toISOString() : null;
 
     const payload = {
       ...form,
       title: form.title.trim(),
       amount: parsedAmount,
       user_id: userId,
-      status: "pending" as ExpenseStatus,
+      status: nextStatus,
+      paid_at: nextPaidAt,
       notes: form.notes.trim() || null,
       updated_at: new Date().toISOString()
     };
@@ -210,6 +230,7 @@ export function ExpenseApp() {
     setForm({
       title: expense.title,
       amount: formatGuaraniInput(Number(expense.amount)),
+      transaction_type: getTransactionType(expense),
       category: expense.category,
       due_date: expense.due_date,
       recurrence: expense.recurrence,
@@ -220,6 +241,7 @@ export function ExpenseApp() {
 
   async function togglePaid(expense: Expense) {
     const isPaid = Boolean(expense.paid_at);
+    if (getTransactionType(expense) === "income") return;
     const nextPaidAt = isPaid ? null : new Date().toISOString();
     const nextStatus = isPaid ? "pending" : "paid";
     const { data, error } = await supabase
@@ -258,9 +280,10 @@ export function ExpenseApp() {
     router.replace("/auth");
   }
 
-  const overdueCount = periodExpenses.filter((expense) => getComputedStatus(expense) === "overdue").length;
+  const overdueCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "overdue").length;
   const nextExpenses = periodExpenses
     .filter((expense) => {
+      if (getTransactionType(expense) === "income") return false;
       const computed = getComputedStatus(expense);
       return computed === "due_today" || computed === "upcoming" || computed === "overdue";
     })
@@ -276,7 +299,7 @@ export function ExpenseApp() {
     <main className="executive-shell">
       <aside className="executive-sidebar">
         <div className="brand-lockup">
-          <span>MG</span>
+            <span>MG</span>
           <div>
             <strong>Mis Gastos</strong>
             <small>Control financiero</small>
@@ -320,9 +343,9 @@ export function ExpenseApp() {
         <section className="executive-grid" id="resumen">
           <article className="executive-balance">
             <div>
-              <span>Pendiente del mes</span>
-              <strong>{formatCurrency(summary.pending)}</strong>
-              <small>{periodExpenses.length} gastos del mes seleccionado</small>
+              <span>Balance del mes</span>
+              <strong>{formatCurrency(balance)}</strong>
+              <small>{formatCurrency(summary.income)} ingresos / {formatCurrency(summary.expenses)} gastos</small>
             </div>
             <div className="balance-ring">
               <b>{overdueCount}</b>
@@ -331,9 +354,14 @@ export function ExpenseApp() {
           </article>
 
           <article className="executive-metric paid">
+            <CircleDollarSign size={20} />
+            <span>Ingresos</span>
+            <strong>{formatCurrency(summary.income)}</strong>
+          </article>
+          <article className="executive-metric paid">
             <WalletCards size={20} />
-            <span>Pagado</span>
-            <strong>{formatCurrency(summary.paid)}</strong>
+            <span>Pendiente</span>
+            <strong>{formatCurrency(summary.pending)}</strong>
           </article>
           <article className="executive-metric upcoming">
             <CalendarDays size={20} />
@@ -365,7 +393,7 @@ export function ExpenseApp() {
             Categoria
             <select value={category} onChange={(event) => setCategory(event.target.value)}>
               <option value="all">Todas</option>
-              {categories.map((item) => <option key={item}>{item}</option>)}
+              {[...categories, ...incomeCategories].map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
         </section>
@@ -393,19 +421,26 @@ export function ExpenseApp() {
             <div className="executive-table">
               {filtered.map((expense) => {
                 const computed = getComputedStatus(expense);
+                const transactionType = getTransactionType(expense);
                 return (
-                  <article className={`executive-row ${computed}`} key={expense.id}>
-                    <button className="paid-toggle" onClick={() => togglePaid(expense)} title="Marcar pagado" type="button">
-                      <Check size={18} />
-                    </button>
+                  <article className={`executive-row ${computed} ${transactionType}`} key={expense.id}>
+                    {transactionType === "income" ? (
+                      <span className="income-marker"><CircleDollarSign size={18} /></span>
+                    ) : (
+                      <button className="paid-toggle" onClick={() => togglePaid(expense)} title="Marcar pagado" type="button">
+                        <Check size={18} />
+                      </button>
+                    )}
                     <div className="row-title">
                       <h3>{expense.title}</h3>
-                      <span>{expense.category}</span>
+                      <span>{transactionType === "income" ? "Ingreso" : "Gasto"} / {expense.category}</span>
                     </div>
-                    <strong>{formatCurrency(Number(expense.amount))}</strong>
+                    <strong className={transactionType === "income" ? "income-amount" : ""}>
+                      {transactionType === "income" ? "+" : ""}{formatCurrency(Number(expense.amount))}
+                    </strong>
                     <span>{new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}</span>
                     <div className="row-pills">
-                      <span className="status-pill">{statusLabels[computed]}</span>
+                      <span className="status-pill">{transactionType === "income" ? "Ingreso" : statusLabels[computed]}</span>
                       {expense.recurrence === "monthly" ? <span className="repeat-pill">Mensual</span> : null}
                     </div>
                     <div className="row-actions">
@@ -456,17 +491,18 @@ export function ExpenseApp() {
               <div className="card-heading">
                 <div>
                   <p className="eyebrow">{editingId ? "Actualizacion" : "Nuevo registro"}</p>
-                  <h2>{editingId ? "Editar gasto" : "Agregar gasto"}</h2>
+                  <h2>{editingId ? "Editar movimiento" : "Agregar movimiento"}</h2>
                 </div>
                 <button className="icon-button" onClick={closeForm} type="button">
                   <X size={20} />
                 </button>
               </div>
               <form className="executive-form" onSubmit={saveExpense}>
+                <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
                 <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
                 <label>Monto<input inputMode="numeric" placeholder="380.000" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
-                <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
-                <label>Vencimiento<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
+                <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{(form.transaction_type === "income" ? incomeCategories : categories).map((item) => <option key={item}>{item}</option>)}</select></label>
+                <label>{form.transaction_type === "income" ? "Fecha" : "Vencimiento"}<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
                 <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
                 <label className="full">Notas<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></label>
                 <button className="primary-button full" disabled={saving} type="submit">{saving ? "Guardando..." : "Guardar gasto"}</button>

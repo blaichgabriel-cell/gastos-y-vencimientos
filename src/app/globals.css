@@ -1019,7 +1019,7 @@ textarea {
 
 .executive-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(150px, 0.55fr));
+  grid-template-columns: minmax(0, 1.7fr) repeat(4, minmax(140px, 0.5fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -1182,6 +1182,21 @@ textarea {
   border-left-color: var(--overdue);
 }
 
+.executive-row.income {
+  border-left-color: var(--paid);
+}
+
+.income-marker {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #bde8c9;
+  border-radius: 8px;
+  background: #e7f7ec;
+  color: var(--paid);
+}
+
 .row-title {
   min-width: 0;
 }
@@ -1200,6 +1215,10 @@ textarea {
 
 .executive-row > strong {
   white-space: nowrap;
+}
+
+.executive-row > strong.income-amount {
+  color: var(--paid);
 }
 
 .row-pills {

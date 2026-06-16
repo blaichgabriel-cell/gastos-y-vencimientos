@@ -1,11 +1,13 @@
 export type ExpenseStatus = "pending" | "due_today" | "upcoming" | "overdue" | "paid";
 export type ExpenseRecurrence = "none" | "monthly";
+export type TransactionType = "expense" | "income";
 
 export type Expense = {
   id: string;
   user_id: string;
   title: string;
   amount: number;
+  transaction_type?: TransactionType;
   category: string;
   due_date: string;
   status: ExpenseStatus;
@@ -19,6 +21,7 @@ export type Expense = {
 export type ExpenseInput = {
   title: string;
   amount: string;
+  transaction_type: TransactionType;
   category: string;
   due_date: string;
   recurrence: ExpenseRecurrence;
@@ -75,6 +78,18 @@ export const categories = [
   "Inversion",
   "Ocio",
   "Otro"
+];
+
+export const incomeCategories = [
+  "Sueldo",
+  "Honorarios",
+  "Ventas",
+  "Cobros",
+  "Transferencia",
+  "Regalo",
+  "Intereses",
+  "Reembolso",
+  "Otro ingreso"
 ];
 
 export function formatCurrency(amount: number) {
