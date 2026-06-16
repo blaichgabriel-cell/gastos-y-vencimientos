@@ -89,11 +89,12 @@ export function ExpenseApp() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [status, setStatus] = useState<"all" | ExpenseStatus>("all");
+  const [transactionFilter, setTransactionFilter] = useState<"all" | "expense" | "income">("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
   const [activeView, setActiveView] = useState<"panel" | "vencimientos" | "alertas">("panel");
   const savingRef = useRef(false);
+  const loadRequestRef = useRef(0);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -112,12 +113,15 @@ export function ExpenseApp() {
   }, [router]);
 
   async function loadExpenses() {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     setLoading(true);
     const { data, error } = await supabase
       .from("expenses")
       .select("*")
       .order("due_date", { ascending: true })
       .order("created_at", { ascending: true });
+    if (requestId !== loadRequestRef.current) return;
     if (error) setNotice(`No se pudieron cargar los gastos: ${error.message}`);
     if (!error && data) setExpenses(sortExpenses(data as Expense[]));
     setLoading(false);
@@ -125,19 +129,14 @@ export function ExpenseApp() {
 
   const periodExpenses = useMemo(() => {
     return expenses.filter((expense) => {
+      const transactionType = getTransactionType(expense);
       return (
         expense.due_date.startsWith(month) &&
+        (transactionFilter === "all" || transactionType === transactionFilter) &&
         (category === "all" || expense.category === category)
       );
     });
-  }, [expenses, month, category]);
-
-  const filtered = useMemo(() => {
-    return periodExpenses.filter((expense) => {
-      const computed = getComputedStatus(expense);
-      return status === "all" || computed === status;
-    });
-  }, [periodExpenses, status]);
+  }, [expenses, month, transactionFilter, category]);
 
   const summary = useMemo(() => {
     return periodExpenses.reduce(
@@ -215,10 +214,13 @@ export function ExpenseApp() {
       return sortExpenses([...withoutEdited, savedExpense]);
     });
     setMonth(savedExpense.due_date.slice(0, 7));
+    setTransactionFilter("all");
+    setCategory("all");
     setForm(createDefaultForm());
     setEditingId(null);
     setShowForm(false);
-    setNotice(editingId ? "Gasto actualizado." : "Gasto guardado.");
+    setNotice(editingId ? "Movimiento actualizado." : "Movimiento guardado.");
+    await loadExpenses();
   }
 
   function openCreateForm() {
@@ -263,15 +265,13 @@ export function ExpenseApp() {
       .select("*")
       .single();
     if (error) setNotice(error.message);
-    else if (data) {
-      setExpenses((current) => sortExpenses(current.map((item) => (item.id === expense.id ? data as Expense : item))));
-    }
+    else if (data) await loadExpenses();
   }
 
   async function deleteExpense(id: string) {
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) setNotice(error.message);
-    else setExpenses((current) => current.filter((expense) => expense.id !== id));
+    else await loadExpenses();
   }
 
   async function enableNotifications() {
@@ -389,12 +389,11 @@ export function ExpenseApp() {
             <input value={month} onChange={(event) => setMonth(event.target.value)} type="month" />
           </label>
           <label>
-            Estado
-            <select value={status} onChange={(event) => setStatus(event.target.value as "all" | ExpenseStatus)}>
+            Tipo
+            <select value={transactionFilter} onChange={(event) => setTransactionFilter(event.target.value as "all" | "expense" | "income")}>
               <option value="all">Todos</option>
-              {Object.entries(statusLabels).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+              <option value="expense">Gastos</option>
+              <option value="income">Ingresos</option>
             </select>
           </label>
           <label>
@@ -422,12 +421,12 @@ export function ExpenseApp() {
             </div>
 
             {loading ? <p className="empty-state">Cargando gastos...</p> : null}
-            {!loading && filtered.length === 0 ? (
-              <p className="empty-state"><Filter size={18} /> No hay gastos con estos filtros.</p>
+            {!loading && periodExpenses.length === 0 ? (
+              <p className="empty-state"><Filter size={18} /> No hay movimientos con estos filtros.</p>
             ) : null}
 
             <div className="executive-table">
-              {filtered.map((expense) => {
+              {periodExpenses.map((expense) => {
                 const computed = getComputedStatus(expense);
                 const transactionType = getTransactionType(expense);
                 return (
