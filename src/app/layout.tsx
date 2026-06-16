@@ -4,8 +4,8 @@ import "./globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
 
 export const metadata: Metadata = {
-  title: "Gastos",
-  description: "Control de gastos y vencimientos de pagos",
+  title: "Mi Balance",
+  description: "Control de ingresos, gastos, balance y vencimientos",
   manifest: "/manifest.webmanifest"
 };
 

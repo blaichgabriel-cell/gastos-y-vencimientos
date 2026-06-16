@@ -6,10 +6,10 @@ export default function HomePage() {
     <main className="home-shell">
       <section className="home-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Gastos y vencimientos</p>
-          <h1>Una app simple para no olvidarte de pagar.</h1>
+          <p className="eyebrow">Mi Balance</p>
+          <h1>Ingresos, gastos y vencimientos en un solo lugar.</h1>
           <p>
-            Carga tus gastos, controla el mes, marca pagos y prepara avisos para el celular antes de cada vencimiento.
+            Carga ingresos, controla gastos, revisa tu balance mensual y prepara avisos antes de cada vencimiento.
           </p>
           <Link className="primary-link" href="/auth">
             Entrar a mi cuenta <ArrowRight size={18} />
@@ -30,7 +30,7 @@ export default function HomePage() {
             <span>Internet</span>
             <b>Proximo</b>
           </div>
-          <div className="preview-total">Pendiente: Gs. 1.680.000</div>
+          <div className="preview-total">Balance: Gs. 1.680.000</div>
         </div>
       </section>
       <section className="feature-strip">

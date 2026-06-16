@@ -1,7 +1,7 @@
 {
-  "name": "Gastos y Vencimientos",
-  "short_name": "Gastos",
-  "description": "Control de gastos, pagos y vencimientos",
+  "name": "Mi Balance",
+  "short_name": "Balance",
+  "description": "Control de ingresos, gastos, pagos y vencimientos",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#f6f7f9",

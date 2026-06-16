@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -91,6 +91,7 @@ export function ExpenseApp() {
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
   const [activeView, setActiveView] = useState<"panel" | "vencimientos" | "alertas">("panel");
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -160,11 +161,14 @@ export function ExpenseApp() {
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setNotice("");
     const { data: userData, error: userError } = await supabase.auth.getUser();
     const userId = userData.user?.id ?? session?.user.id;
 
     if (userError || !userId) {
+      savingRef.current = false;
       setNotice("Tu sesion no esta activa. Cerra sesion y volve a entrar.");
       return;
     }
@@ -172,6 +176,7 @@ export function ExpenseApp() {
     const parsedAmount = parseGuaraniAmount(form.amount);
 
     if (!form.title.trim() || parsedAmount <= 0) {
+      savingRef.current = false;
       setNotice("Completa un nombre y un monto mayor a cero.");
       return;
     }
@@ -196,6 +201,7 @@ export function ExpenseApp() {
       : await supabase.from("expenses").insert(payload).select("*").single();
 
     setSaving(false);
+    savingRef.current = false;
     if (result.error) {
       setNotice(`No se pudo guardar: ${result.error.message}`);
       return;
@@ -301,8 +307,8 @@ export function ExpenseApp() {
         <div className="brand-lockup">
             <span>MG</span>
           <div>
-            <strong>Mis Gastos</strong>
-            <small>Control financiero</small>
+            <strong>Mi Balance</strong>
+            <small>Finanzas personales</small>
           </div>
         </div>
         <nav className="side-nav" aria-label="Principal">
@@ -327,7 +333,7 @@ export function ExpenseApp() {
         <header className="executive-topbar">
           <div>
             <p className="eyebrow">Panel ejecutivo</p>
-            <h1>Mis Gastos</h1>
+            <h1>Mi Balance</h1>
             <span className="view-subtitle">{viewCopy[activeView]}</span>
           </div>
           <div className="executive-actions">
@@ -335,7 +341,7 @@ export function ExpenseApp() {
               <Bell size={20} />
             </button>
             <button className="executive-primary" onClick={openCreateForm} type="button">
-              <Plus size={18} /> Agregar gasto
+              <Plus size={18} /> Agregar movimiento
             </button>
           </div>
         </header>
@@ -406,7 +412,7 @@ export function ExpenseApp() {
             <div className="card-heading">
               <div>
                 <p className="eyebrow">Movimientos</p>
-                <h2>Gastos y pagos</h2>
+                <h2>Movimientos del mes</h2>
               </div>
               <button className="small-action" onClick={openCreateForm} type="button">
                 <Plus size={16} /> Nuevo
@@ -505,7 +511,7 @@ export function ExpenseApp() {
                 <label>{form.transaction_type === "income" ? "Fecha" : "Vencimiento"}<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
                 <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
                 <label className="full">Notas<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></label>
-                <button className="primary-button full" disabled={saving} type="submit">{saving ? "Guardando..." : "Guardar gasto"}</button>
+                <button className="primary-button full" disabled={saving} type="submit">{saving ? "Guardando..." : "Guardar movimiento"}</button>
               </form>
             </div>
           </section>
