@@ -7,7 +7,8 @@ export type Expense = {
   user_id: string;
   title: string;
   amount: number;
-  transaction_type?: TransactionType;
+  transaction_type: TransactionType;
+  client_token: string | null;
   category: string;
   due_date: string;
   status: ExpenseStatus;

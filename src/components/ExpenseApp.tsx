@@ -32,6 +32,7 @@ type ExpenseForm = {
   title: string;
   amount: string;
   transaction_type: "expense" | "income";
+  client_token: string;
   category: string;
   due_date: string;
   recurrence: "none" | "monthly";
@@ -56,6 +57,7 @@ function createDefaultForm(): ExpenseForm {
     title: "",
     amount: "",
     transaction_type: "expense",
+    client_token: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
     category: "Servicios",
     due_date: new Date().toISOString().slice(0, 10),
     recurrence: "none",
@@ -76,7 +78,7 @@ function sortExpenses(items: Expense[]) {
 }
 
 function getTransactionType(expense: Expense) {
-  return expense.transaction_type ?? "expense";
+  return expense.transaction_type || "expense";
 }
 
 export function ExpenseApp() {
@@ -164,63 +166,85 @@ export function ExpenseApp() {
     event.preventDefault();
     if (savingRef.current) return;
     savingRef.current = true;
-    setNotice("");
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    const userId = userData.user?.id ?? session?.user.id;
-
-    if (userError || !userId) {
-      savingRef.current = false;
-      setNotice("Tu sesion no esta activa. Cerra sesion y volve a entrar.");
-      return;
-    }
-
-    const parsedAmount = parseGuaraniAmount(form.amount);
-
-    if (!form.title.trim() || parsedAmount <= 0) {
-      savingRef.current = false;
-      setNotice("Completa un nombre y un monto mayor a cero.");
-      return;
-    }
-
     setSaving(true);
-    const nextStatus: ExpenseStatus = form.transaction_type === "income" ? "paid" : "pending";
-    const nextPaidAt = form.transaction_type === "income" ? new Date().toISOString() : null;
+    setNotice("");
 
-    const payload = {
-      ...form,
-      title: form.title.trim(),
-      amount: parsedAmount,
-      user_id: userId,
-      status: nextStatus,
-      paid_at: nextPaidAt,
-      notes: form.notes.trim() || null,
-      updated_at: new Date().toISOString()
-    };
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const userId = userData.user?.id ?? session?.user.id;
 
-    const result = editingId
-      ? await supabase.from("expenses").update(payload).eq("id", editingId).select("*").single()
-      : await supabase.from("expenses").insert(payload).select("*").single();
+      if (userError || !userId) {
+        setNotice("Tu sesion no esta activa. Cerra sesion y volve a entrar.");
+        return;
+      }
 
-    setSaving(false);
-    savingRef.current = false;
-    if (result.error) {
-      setNotice(`No se pudo guardar: ${result.error.message}`);
-      return;
+      const parsedAmount = parseGuaraniAmount(form.amount);
+
+      if (!form.title.trim() || parsedAmount <= 0) {
+        setNotice("Completa un nombre y un monto mayor a cero.");
+        return;
+      }
+
+      const existing = editingId ? expenses.find((expense) => expense.id === editingId) : null;
+      const existingType = existing ? getTransactionType(existing) : null;
+      const changedType = Boolean(existing && existingType !== form.transaction_type);
+      const now = new Date().toISOString();
+      const isIncome = form.transaction_type === "income";
+
+      const nextStatus: ExpenseStatus = isIncome
+        ? "paid"
+        : existing && !changedType
+          ? existing.status
+          : "pending";
+      const nextPaidAt = isIncome
+        ? existing?.paid_at ?? now
+        : existing && !changedType
+          ? existing.paid_at
+          : null;
+
+      const payload = {
+        title: form.title.trim(),
+        amount: parsedAmount,
+        transaction_type: form.transaction_type,
+        client_token: existing?.client_token ?? form.client_token,
+        category: form.category,
+        due_date: form.due_date,
+        recurrence: isIncome ? "none" : form.recurrence,
+        user_id: userId,
+        status: nextStatus,
+        paid_at: nextPaidAt,
+        notes: form.notes.trim() || null,
+        updated_at: now
+      };
+
+      const result = editingId
+        ? await supabase.from("expenses").update(payload).eq("id", editingId).select("*").single()
+        : await supabase.from("expenses").insert(payload).select("*").single();
+
+      if (result.error) {
+        setNotice(`No se pudo guardar: ${result.error.message}`);
+        return;
+      }
+
+      const savedExpense = result.data as Expense;
+      setExpenses((current) => {
+        const withoutEdited = current.filter((expense) => expense.id !== savedExpense.id);
+        return sortExpenses([...withoutEdited, savedExpense]);
+      });
+      setMonth("all");
+      setTransactionFilter("all");
+      setCategory("all");
+      setForm(createDefaultForm());
+      setEditingId(null);
+      setShowForm(false);
+      setNotice(editingId ? "Movimiento actualizado." : "Movimiento guardado.");
+      await loadExpenses();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo guardar el movimiento.");
+    } finally {
+      setSaving(false);
+      savingRef.current = false;
     }
-
-    const savedExpense = result.data as Expense;
-    setExpenses((current) => {
-      const withoutEdited = current.filter((expense) => expense.id !== savedExpense.id);
-      return sortExpenses([...withoutEdited, savedExpense]);
-    });
-    setMonth("all");
-    setTransactionFilter("all");
-    setCategory("all");
-    setForm(createDefaultForm());
-    setEditingId(null);
-    setShowForm(false);
-    setNotice(editingId ? "Movimiento actualizado." : "Movimiento guardado.");
-    await loadExpenses();
   }
 
   function openCreateForm() {
@@ -241,6 +265,7 @@ export function ExpenseApp() {
       title: expense.title,
       amount: formatGuaraniInput(Number(expense.amount)),
       transaction_type: getTransactionType(expense),
+      client_token: expense.client_token ?? (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`),
       category: expense.category,
       due_date: expense.due_date,
       recurrence: expense.recurrence,
@@ -432,7 +457,7 @@ export function ExpenseApp() {
               </button>
             </div>
 
-            {loading ? <p className="empty-state">Cargando gastos...</p> : null}
+            {loading ? <p className="empty-state">Cargando movimientos...</p> : null}
             {!loading && periodExpenses.length === 0 ? (
               <p className="empty-state"><Filter size={18} /> No hay movimientos visibles con estos filtros. Hay {expenses.length} movimientos guardados en total.</p>
             ) : null}
@@ -505,7 +530,7 @@ export function ExpenseApp() {
         </section>
 
         {showForm ? (
-          <section className="executive-modal" role="dialog" aria-modal="true" aria-label="Formulario de gasto">
+          <section className="executive-modal" role="dialog" aria-modal="true" aria-label="Formulario de movimiento">
             <div className="executive-form-card" key={editingId ?? "new-movement"}>
               <div className="card-heading">
                 <div>
@@ -522,7 +547,9 @@ export function ExpenseApp() {
                 <label>Monto<input autoComplete="off" inputMode="numeric" name="movement_amount" placeholder="0" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
                 <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{(form.transaction_type === "income" ? incomeCategories : categories).map((item) => <option key={item}>{item}</option>)}</select></label>
                 <label>{form.transaction_type === "income" ? "Fecha" : "Vencimiento"}<input value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} type="date" required /></label>
-                <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
+                {form.transaction_type === "expense" ? (
+                  <label>Repeticion<select value={form.recurrence} onChange={(e) => setForm({ ...form, recurrence: e.target.value as "none" | "monthly" })}><option value="none">Unico</option><option value="monthly">Mensual</option></select></label>
+                ) : null}
                 <label className="full">Notas<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></label>
                 <button className="primary-button full" disabled={saving} type="submit">{saving ? "Guardando..." : "Guardar movimiento"}</button>
               </form>

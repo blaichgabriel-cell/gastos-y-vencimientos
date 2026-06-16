@@ -59,7 +59,7 @@ export function AuthForm() {
       <div>
         <p className="eyebrow">Cuenta personal</p>
         <h1>{mode === "signin" ? "Iniciar sesion" : "Crear cuenta"}</h1>
-        <p className="muted">Tus gastos quedan guardados en Supabase y separados por usuario.</p>
+        <p className="muted">Tus movimientos quedan guardados en Supabase y separados por usuario.</p>
       </div>
 
       <div className="segmented">
