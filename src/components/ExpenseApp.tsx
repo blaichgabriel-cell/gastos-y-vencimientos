@@ -25,9 +25,13 @@ import {
   Expense,
   ExpenseKind,
   ExpenseStatus,
+  FinancialAccount,
+  FinancialAccountInput,
+  FinancialAccountType,
   formatCurrency,
   getComputedStatus,
   incomeCategories,
+  MovementKind,
   statusLabels
 } from "@/lib/expenses";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase/client";
@@ -37,12 +41,29 @@ type ExpenseForm = {
   amount: string;
   transaction_type: "expense" | "income";
   expense_kind: ExpenseKind;
+  movement_kind: MovementKind;
+  account_id: string;
+  payment_target_account_id: string;
   client_token: string;
   category: string;
   due_date: string;
   recurrence: "none" | "monthly";
   notes: string;
 };
+
+function createDefaultAccountForm(): FinancialAccountInput {
+  return {
+    name: "",
+    institution: "",
+    account_type: "bank",
+    balance: "",
+    credit_limit: "",
+    credit_used: "",
+    statement_day: "",
+    due_day: "",
+    notes: ""
+  };
+}
 
 type MonthlyReport = {
   month: string;
@@ -73,6 +94,9 @@ function createDefaultForm(): ExpenseForm {
     amount: "",
     transaction_type: "expense",
     expense_kind: "variable",
+    movement_kind: "normal",
+    account_id: "",
+    payment_target_account_id: "",
     client_token: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
     category: "Servicios",
     due_date: new Date().toISOString().slice(0, 10),
@@ -100,6 +124,23 @@ function getTransactionType(expense: Expense) {
 function getExpenseKind(expense: Expense) {
   return expense.expense_kind ?? (expense.recurrence === "monthly" ? "fixed" : "variable");
 }
+
+function getMovementKind(expense: Expense) {
+  return expense.movement_kind ?? "normal";
+}
+
+function isCreditAccount(account: FinancialAccount | undefined) {
+  return account?.account_type === "credit_card" || account?.account_type === "debt";
+}
+
+const accountTypeLabels: Record<FinancialAccountType, string> = {
+  bank: "Banco",
+  cash: "Efectivo",
+  savings: "Ahorro",
+  investment: "Inversion",
+  credit_card: "Tarjeta",
+  debt: "Deuda"
+};
 
 function getMonthLabel(monthKey: string) {
   return new Date(`${monthKey}-01T00:00:00`).toLocaleDateString("es-PY", {
@@ -136,17 +177,22 @@ export function ExpenseApp() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [form, setForm] = useState<ExpenseForm>(() => createDefaultForm());
+  const [accountForm, setAccountForm] = useState<FinancialAccountInput>(() => createDefaultAccountForm());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAccount, setSavingAccount] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showAccountForm, setShowAccountForm] = useState(false);
   const [month, setMonth] = useState("all");
   const [transactionFilter, setTransactionFilter] = useState<"all" | "expense" | "income">("all");
   const [kindFilter, setKindFilter] = useState<"all" | "fixed" | "variable">("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
-  const [activeView, setActiveView] = useState<"panel" | "balances" | "vencimientos" | "alertas">("panel");
+  const [activeView, setActiveView] = useState<"panel" | "cuentas" | "balances" | "vencimientos" | "alertas">("panel");
   const savingRef = useRef(false);
   const loadRequestRef = useRef(0);
 
@@ -163,6 +209,7 @@ export function ExpenseApp() {
       }
       setSession(data.session);
       loadExpenses();
+      loadAccounts();
     });
   }, [router]);
 
@@ -181,6 +228,19 @@ export function ExpenseApp() {
     setLoading(false);
   }
 
+  async function loadAccounts() {
+    const { data, error } = await supabase
+      .from("financial_accounts")
+      .select("*")
+      .order("account_type", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) {
+      setNotice(`No se pudieron cargar las cuentas: ${error.message}`);
+      return;
+    }
+    if (data) setAccounts(data as FinancialAccount[]);
+  }
+
   const periodExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       const transactionType = getTransactionType(expense);
@@ -197,6 +257,7 @@ export function ExpenseApp() {
     return periodExpenses.reduce(
       (acc, expense) => {
         const transactionType = getTransactionType(expense);
+        if (getMovementKind(expense) === "card_payment") return acc;
         if (transactionType === "income") {
           acc.income += Number(expense.amount);
           return acc;
@@ -264,6 +325,10 @@ export function ExpenseApp() {
       const amount = Number(expense.amount);
 
       report.movements += 1;
+      if (getMovementKind(expense) === "card_payment") {
+        reports.set(reportMonth, report);
+        return;
+      }
       if (getTransactionType(expense) === "income") {
         report.income += amount;
       } else {
@@ -287,6 +352,62 @@ export function ExpenseApp() {
     expenses: currentReport.expenses - previousReport.expenses,
     balance: currentReport.balance - previousReport.balance
   };
+
+  const accountSnapshots = useMemo(() => {
+    return accounts.map((account) => {
+      let projectedBalance = Number(account.balance ?? 0);
+      let projectedDebt = Number(account.credit_used ?? 0);
+
+      expenses.forEach((expense) => {
+        const amount = Number(expense.amount);
+        const movementKind = getMovementKind(expense);
+        const transactionType = getTransactionType(expense);
+
+        if (movementKind === "card_payment") {
+          if (expense.account_id === account.id && !isCreditAccount(account)) projectedBalance -= amount;
+          if (expense.payment_target_account_id === account.id && isCreditAccount(account)) projectedDebt -= amount;
+          return;
+        }
+
+        if (expense.account_id !== account.id) return;
+        if (isCreditAccount(account)) {
+          if (transactionType === "expense") projectedDebt += amount;
+          if (transactionType === "income") projectedDebt -= amount;
+        } else {
+          if (transactionType === "income") projectedBalance += amount;
+          if (transactionType === "expense") projectedBalance -= amount;
+        }
+      });
+
+      const safeDebt = Math.max(projectedDebt, 0);
+      const creditLimit = Number(account.credit_limit ?? 0);
+      return {
+        account,
+        balance: projectedBalance,
+        debt: safeDebt,
+        availableCredit: Math.max(creditLimit - safeDebt, 0)
+      };
+    });
+  }, [accounts, expenses]);
+
+  const accountsSummary = accountSnapshots.reduce(
+    (acc, item) => {
+      if (isCreditAccount(item.account)) {
+        acc.creditLimit += Number(item.account.credit_limit ?? 0);
+        acc.creditUsed += item.debt;
+        acc.availableCredit += item.availableCredit;
+        return acc;
+      }
+
+      if (item.account.account_type === "investment") acc.investments += item.balance;
+      else acc.available += item.balance;
+      return acc;
+    },
+    { available: 0, investments: 0, creditLimit: 0, creditUsed: 0, availableCredit: 0 }
+  );
+  const netWorth = accountsSummary.available + accountsSummary.investments - accountsSummary.creditUsed;
+  const assetAccounts = accounts.filter((account) => !isCreditAccount(account));
+  const creditAccounts = accounts.filter((account) => isCreditAccount(account));
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
@@ -316,6 +437,12 @@ export function ExpenseApp() {
       const changedType = Boolean(existing && existingType !== form.transaction_type);
       const now = new Date().toISOString();
       const isIncome = form.transaction_type === "income";
+      const movementKind = isIncome ? "normal" : form.movement_kind;
+
+      if (movementKind === "card_payment" && (!form.account_id || !form.payment_target_account_id)) {
+        setNotice("Para pagar una tarjeta elegi la cuenta de origen y la tarjeta destino.");
+        return;
+      }
 
       const nextStatus: ExpenseStatus = isIncome
         ? "paid"
@@ -333,6 +460,9 @@ export function ExpenseApp() {
         amount: parsedAmount,
         transaction_type: form.transaction_type,
         expense_kind: isIncome ? null : form.expense_kind,
+        movement_kind: movementKind,
+        account_id: form.account_id || null,
+        payment_target_account_id: movementKind === "card_payment" ? form.payment_target_account_id : null,
         client_token: existing?.client_token ?? form.client_token,
         category: form.category,
         due_date: form.due_date,
@@ -394,6 +524,9 @@ export function ExpenseApp() {
       amount: formatGuaraniInput(Number(expense.amount)),
       transaction_type: getTransactionType(expense),
       expense_kind: getExpenseKind(expense),
+      movement_kind: getMovementKind(expense),
+      account_id: expense.account_id ?? "",
+      payment_target_account_id: expense.payment_target_account_id ?? "",
       client_token: expense.client_token ?? (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`),
       category: expense.category,
       due_date: expense.due_date,
@@ -428,6 +561,93 @@ export function ExpenseApp() {
     else await loadExpenses();
   }
 
+  function openCreateAccountForm() {
+    setEditingAccountId(null);
+    setAccountForm(createDefaultAccountForm());
+    setShowAccountForm(true);
+  }
+
+  function closeAccountForm() {
+    setEditingAccountId(null);
+    setAccountForm(createDefaultAccountForm());
+    setShowAccountForm(false);
+  }
+
+  function startEditAccount(account: FinancialAccount) {
+    setEditingAccountId(account.id);
+    setAccountForm({
+      name: account.name,
+      institution: account.institution ?? "",
+      account_type: account.account_type,
+      balance: formatGuaraniInput(Number(account.balance ?? 0)),
+      credit_limit: formatGuaraniInput(Number(account.credit_limit ?? 0)),
+      credit_used: formatGuaraniInput(Number(account.credit_used ?? 0)),
+      statement_day: account.statement_day ? String(account.statement_day) : "",
+      due_day: account.due_day ? String(account.due_day) : "",
+      notes: account.notes ?? ""
+    });
+    setShowAccountForm(true);
+  }
+
+  async function saveAccount(event: React.FormEvent) {
+    event.preventDefault();
+    setSavingAccount(true);
+    setNotice("");
+
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const userId = userData.user?.id ?? session?.user.id;
+
+      if (userError || !userId) {
+        setNotice("Tu sesion no esta activa. Cerra sesion y volve a entrar.");
+        return;
+      }
+
+      if (!accountForm.name.trim()) {
+        setNotice("Completa el nombre de la cuenta o tarjeta.");
+        return;
+      }
+
+      const isCredit = accountForm.account_type === "credit_card" || accountForm.account_type === "debt";
+      const payload = {
+        user_id: userId,
+        name: accountForm.name.trim(),
+        institution: accountForm.institution.trim() || null,
+        account_type: accountForm.account_type,
+        balance: isCredit ? 0 : parseGuaraniAmount(accountForm.balance),
+        credit_limit: isCredit ? parseGuaraniAmount(accountForm.credit_limit) : 0,
+        credit_used: isCredit ? parseGuaraniAmount(accountForm.credit_used) : 0,
+        statement_day: isCredit && accountForm.statement_day ? Number(accountForm.statement_day) : null,
+        due_day: isCredit && accountForm.due_day ? Number(accountForm.due_day) : null,
+        notes: accountForm.notes.trim() || null,
+        updated_at: new Date().toISOString()
+      };
+
+      const result = editingAccountId
+        ? await supabase.from("financial_accounts").update(payload).eq("id", editingAccountId).select("*").single()
+        : await supabase.from("financial_accounts").insert(payload).select("*").single();
+
+      if (result.error) {
+        setNotice(`No se pudo guardar la cuenta: ${result.error.message}`);
+        return;
+      }
+
+      await loadAccounts();
+      closeAccountForm();
+      setNotice(editingAccountId ? "Cuenta actualizada." : "Cuenta agregada.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo guardar la cuenta.");
+    } finally {
+      setSavingAccount(false);
+    }
+  }
+
+  async function deleteAccount(id: string) {
+    const { error } = await supabase.from("financial_accounts").delete().eq("id", id);
+    if (error) setNotice(error.message);
+    else await loadAccounts();
+  }
+
   async function enableNotifications() {
     if (!("Notification" in window)) {
       setNotice("Este navegador no soporta notificaciones web.");
@@ -450,9 +670,11 @@ export function ExpenseApp() {
     })
     .slice(0, activeView === "alertas" ? 20 : 5);
   const hasPaymentAlerts = overdueCount > 0 || dueTodayCount > 0 || summary.upcoming > 0;
+  const showMoneyDashboard = activeView !== "balances" && activeView !== "cuentas";
 
   const viewCopy = {
     panel: "Situacion completa del periodo seleccionado.",
+    cuentas: "Bancos, efectivo, ahorros, tarjetas y patrimonio neto.",
     balances: "Cierre automatico por mes y comparacion mensual.",
     vencimientos: "Gestiona tus pagos, estados y fechas.",
     alertas: "Prioridad de vencimientos cercanos o atrasados."
@@ -471,6 +693,9 @@ export function ExpenseApp() {
         <nav className="side-nav" aria-label="Principal">
           <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
             <WalletCards size={18} /> Panel ejecutivo
+          </button>
+          <button className={activeView === "cuentas" ? "active" : ""} onClick={() => setActiveView("cuentas")} type="button">
+            <CircleDollarSign size={18} /> Cuentas
           </button>
           <button className={activeView === "balances" ? "active" : ""} onClick={() => setActiveView("balances")} type="button">
             <BarChart3 size={18} /> Balances
@@ -506,7 +731,7 @@ export function ExpenseApp() {
           </div>
         </header>
 
-        {activeView !== "balances" ? (
+        {showMoneyDashboard ? (
         <>
         <section className="executive-overview" id="resumen">
           <article className={`executive-balance ${balanceTone}`}>
@@ -609,6 +834,91 @@ export function ExpenseApp() {
         ) : null}
 
         {notice ? <p className="notice executive-notice">{notice}</p> : null}
+
+        {activeView === "cuentas" ? (
+          <section className="accounts-view" aria-label="Cuentas y tarjetas">
+            <section className="accounts-summary-grid">
+              <article className="executive-card account-summary-card">
+                <span>Disponible real</span>
+                <strong>{formatCurrency(accountsSummary.available)}</strong>
+              </article>
+              <article className="executive-card account-summary-card">
+                <span>Inversiones</span>
+                <strong>{formatCurrency(accountsSummary.investments)}</strong>
+              </article>
+              <article className="executive-card account-summary-card debt">
+                <span>Deuda tarjetas</span>
+                <strong>{formatCurrency(accountsSummary.creditUsed)}</strong>
+              </article>
+              <article className="executive-card account-summary-card">
+                <span>Credito disponible</span>
+                <strong>{formatCurrency(accountsSummary.availableCredit)}</strong>
+              </article>
+              <article className={`executive-card account-summary-card ${netWorth >= 0 ? "positive" : "negative"}`}>
+                <span>Patrimonio neto</span>
+                <strong>{formatCurrency(netWorth)}</strong>
+              </article>
+            </section>
+
+            <section className="accounts-layout">
+              <article className="executive-card">
+                <div className="card-heading">
+                  <div>
+                    <p className="eyebrow">Plata real</p>
+                    <h2>Bancos y ahorros</h2>
+                  </div>
+                  <button className="small-action" onClick={openCreateAccountForm} type="button"><Plus size={16} /> Nueva</button>
+                </div>
+                <div className="account-list">
+                  {assetAccounts.length === 0 ? <p className="empty-side">Agrega tus bancos, efectivo o ahorros.</p> : null}
+                  {accountSnapshots.filter((item) => !isCreditAccount(item.account)).map((item) => (
+                    <article className="account-row" key={item.account.id}>
+                      <div>
+                        <strong>{item.account.name}</strong>
+                        <span>{accountTypeLabels[item.account.account_type]}{item.account.institution ? ` / ${item.account.institution}` : ""}</span>
+                      </div>
+                      <b>{formatCurrency(item.balance)}</b>
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => startEditAccount(item.account)} title="Editar" type="button"><Edit2 size={18} /></button>
+                        <button className="icon-button danger" onClick={() => deleteAccount(item.account.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+
+              <article className="executive-card">
+                <div className="card-heading">
+                  <div>
+                    <p className="eyebrow">Credito</p>
+                    <h2>Tarjetas y deudas</h2>
+                  </div>
+                  <button className="small-action" onClick={openCreateAccountForm} type="button"><Plus size={16} /> Nueva</button>
+                </div>
+                <div className="account-list">
+                  {creditAccounts.length === 0 ? <p className="empty-side">Agrega tus tarjetas de credito o deudas.</p> : null}
+                  {accountSnapshots.filter((item) => isCreditAccount(item.account)).map((item) => (
+                    <article className="account-row credit" key={item.account.id}>
+                      <div>
+                        <strong>{item.account.name}</strong>
+                        <span>{accountTypeLabels[item.account.account_type]}{item.account.institution ? ` / ${item.account.institution}` : ""}</span>
+                        <small>Vence dia {item.account.due_day ?? "-"} / Cierra dia {item.account.statement_day ?? "-"}</small>
+                      </div>
+                      <div className="credit-values">
+                        <b>{formatCurrency(item.debt)}</b>
+                        <span>Disponible {formatCurrency(item.availableCredit)}</span>
+                      </div>
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => startEditAccount(item.account)} title="Editar" type="button"><Edit2 size={18} /></button>
+                        <button className="icon-button danger" onClick={() => deleteAccount(item.account.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+            </section>
+          </section>
+        ) : null}
 
         {activeView === "balances" ? (
           <section className="balances-view" aria-label="Balances mensuales">
@@ -776,7 +1086,7 @@ export function ExpenseApp() {
           </section>
         ) : null}
 
-        {activeView !== "balances" && hasPaymentAlerts ? (
+        {showMoneyDashboard && hasPaymentAlerts ? (
           <section className={`internal-alert ${overdueCount > 0 ? "danger" : dueTodayCount > 0 ? "today" : "upcoming"}`}>
             <div>
               <strong>
@@ -794,7 +1104,7 @@ export function ExpenseApp() {
           </section>
         ) : null}
 
-        {activeView !== "balances" ? (
+        {showMoneyDashboard ? (
         <section className={`executive-content view-${activeView}`}>
           {(activeView === "panel" || activeView === "vencimientos") ? (
           <article className="executive-card table-card" id="vencimientos">
@@ -818,6 +1128,7 @@ export function ExpenseApp() {
                 const computed = getComputedStatus(expense);
                 const transactionType = getTransactionType(expense);
                 const expenseKind = getExpenseKind(expense);
+                const movementKind = getMovementKind(expense);
                 return (
                   <article className={`executive-row ${computed} ${transactionType}`} key={expense.id}>
                     {transactionType === "income" ? (
@@ -829,15 +1140,15 @@ export function ExpenseApp() {
                     )}
                     <div className="row-title">
                       <h3>{expense.title}</h3>
-                      <span>{transactionType === "income" ? "Ingreso" : expenseKind === "fixed" ? "Gasto fijo" : "Gasto variable"} / {expense.category}</span>
+                      <span>{transactionType === "income" ? "Ingreso" : movementKind === "card_payment" ? "Pago de tarjeta" : expenseKind === "fixed" ? "Gasto fijo" : "Gasto variable"} / {expense.category}</span>
                     </div>
                     <strong className={transactionType === "income" ? "income-amount" : "expense-amount"}>
                       {transactionType === "income" ? "+" : "-"}{formatCurrency(Number(expense.amount))}
                     </strong>
                     <span>{new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}</span>
                     <div className="row-pills">
-                      <span className="status-pill">{transactionType === "income" ? "Ingreso" : statusLabels[computed]}</span>
-                      {transactionType === "expense" ? (
+                      <span className="status-pill">{transactionType === "income" ? "Ingreso" : movementKind === "card_payment" ? "Pago tarjeta" : statusLabels[computed]}</span>
+                      {transactionType === "expense" && movementKind !== "card_payment" ? (
                         <span className="kind-pill">{expenseKind === "fixed" ? "Fijo" : "Variable"}</span>
                       ) : null}
                       {expense.recurrence === "monthly" ? <span className="repeat-pill">Mensual</span> : null}
@@ -898,9 +1209,16 @@ export function ExpenseApp() {
                 </button>
               </div>
               <form className="executive-form" onSubmit={saveExpense} autoComplete="off">
-                <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
+                <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", movement_kind: "normal", payment_target_account_id: "", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
+                {form.transaction_type === "expense" ? (
+                  <label>Operacion<select value={form.movement_kind} onChange={(e) => setForm({ ...form, movement_kind: e.target.value as MovementKind })}><option value="normal">Gasto normal</option><option value="card_payment">Pago de tarjeta</option></select></label>
+                ) : null}
                 {form.transaction_type === "expense" ? (
                   <label>Clase<select value={form.expense_kind} onChange={(e) => setForm({ ...form, expense_kind: e.target.value as ExpenseKind })}><option value="variable">Variable / ocasional</option><option value="fixed">Fijo</option></select></label>
+                ) : null}
+                <label>{form.movement_kind === "card_payment" ? "Cuenta origen" : "Cuenta / tarjeta"}<select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}><option value="">Sin cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} / {accountTypeLabels[account.account_type]}</option>)}</select></label>
+                {form.transaction_type === "expense" && form.movement_kind === "card_payment" ? (
+                  <label>Tarjeta destino<select value={form.payment_target_account_id} onChange={(e) => setForm({ ...form, payment_target_account_id: e.target.value })}><option value="">Elegir tarjeta</option>{accounts.filter((account) => isCreditAccount(account)).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
                 ) : null}
                 <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
                 <label>Monto<input autoComplete="off" inputMode="numeric" name="movement_amount" placeholder="0" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
@@ -916,9 +1234,45 @@ export function ExpenseApp() {
           </section>
         ) : null}
 
+        {showAccountForm ? (
+          <section className="executive-modal" role="dialog" aria-modal="true" aria-label="Formulario de cuenta">
+            <div className="executive-form-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">{editingAccountId ? "Actualizacion" : "Nueva cuenta"}</p>
+                  <h2>{editingAccountId ? "Editar cuenta" : "Agregar cuenta o tarjeta"}</h2>
+                </div>
+                <button className="icon-button" onClick={closeAccountForm} type="button">
+                  <X size={20} />
+                </button>
+              </div>
+              <form className="executive-form" onSubmit={saveAccount} autoComplete="off">
+                <label>Tipo<select value={accountForm.account_type} onChange={(e) => setAccountForm({ ...accountForm, account_type: e.target.value as FinancialAccountType })}><option value="bank">Banco</option><option value="cash">Efectivo</option><option value="savings">Ahorro</option><option value="investment">Inversion</option><option value="credit_card">Tarjeta de credito</option><option value="debt">Deuda</option></select></label>
+                <label>Nombre<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Ej. Ueno, Visa Itaú" required /></label>
+                <label>Banco / entidad<input value={accountForm.institution} onChange={(e) => setAccountForm({ ...accountForm, institution: e.target.value })} placeholder="Opcional" /></label>
+                {accountForm.account_type === "credit_card" || accountForm.account_type === "debt" ? (
+                  <>
+                    <label>Limite<input inputMode="numeric" value={accountForm.credit_limit} onBlur={(e) => setAccountForm({ ...accountForm, credit_limit: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, credit_limit: e.target.value })} placeholder="0" /></label>
+                    <label>Deuda actual<input inputMode="numeric" value={accountForm.credit_used} onBlur={(e) => setAccountForm({ ...accountForm, credit_used: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, credit_used: e.target.value })} placeholder="0" /></label>
+                    <label>Dia de cierre<input inputMode="numeric" max="31" min="1" type="number" value={accountForm.statement_day} onChange={(e) => setAccountForm({ ...accountForm, statement_day: e.target.value })} /></label>
+                    <label>Dia de vencimiento<input inputMode="numeric" max="31" min="1" type="number" value={accountForm.due_day} onChange={(e) => setAccountForm({ ...accountForm, due_day: e.target.value })} /></label>
+                  </>
+                ) : (
+                  <label>Saldo actual<input inputMode="numeric" value={accountForm.balance} onBlur={(e) => setAccountForm({ ...accountForm, balance: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="0" /></label>
+                )}
+                <label className="full">Notas<textarea value={accountForm.notes} onChange={(e) => setAccountForm({ ...accountForm, notes: e.target.value })} rows={3} /></label>
+                <button className="primary-button full" disabled={savingAccount} type="submit">{savingAccount ? "Guardando..." : "Guardar cuenta"}</button>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
         <nav className="mobile-nav" aria-label="Navegacion movil">
           <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
             <WalletCards size={18} /> Panel
+          </button>
+          <button className={activeView === "cuentas" ? "active" : ""} onClick={() => setActiveView("cuentas")} type="button">
+            <CircleDollarSign size={18} /> Cuentas
           </button>
           <button className={activeView === "balances" ? "active" : ""} onClick={() => setActiveView("balances")} type="button">
             <BarChart3 size={18} /> Balance

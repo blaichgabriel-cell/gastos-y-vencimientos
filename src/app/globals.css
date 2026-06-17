@@ -1557,6 +1557,101 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.accounts-view {
+  display: grid;
+  gap: 12px;
+}
+
+.accounts-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.account-summary-card {
+  display: grid;
+  gap: 12px;
+  min-height: 112px;
+}
+
+.account-summary-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.account-summary-card strong {
+  overflow-wrap: anywhere;
+  font-size: clamp(20px, 1.5vw, 24px);
+}
+
+.account-summary-card.debt strong,
+.account-summary-card.negative strong {
+  color: var(--overdue);
+}
+
+.account-summary-card.positive strong {
+  color: var(--paid);
+}
+
+.accounts-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.account-list {
+  display: grid;
+  gap: 8px;
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.account-row.credit {
+  border-left-color: #2563eb;
+}
+
+.account-row strong,
+.account-row span,
+.account-row small {
+  display: block;
+}
+
+.account-row strong {
+  overflow-wrap: anywhere;
+}
+
+.account-row span,
+.account-row small,
+.credit-values span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.account-row > b,
+.credit-values b {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.credit-values {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
 .executive-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -1819,9 +1914,14 @@ textarea {
   }
 
   .balance-period-grid,
+  .accounts-layout,
   .month-close-details,
   .comparison-grid {
     grid-template-columns: 1fr;
+  }
+
+  .accounts-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .monthly-history-row {
@@ -1854,6 +1954,8 @@ textarea {
   .executive-kpis,
   .finance-insights,
   .balance-period-grid,
+  .accounts-summary-grid,
+  .accounts-layout,
   .month-close-details,
   .comparison-grid,
   .executive-filters,
@@ -1899,7 +2001,7 @@ textarea {
     left: 12px;
     z-index: 8;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 6px;
     border: 1px solid #dbe2ea;
     border-radius: 8px;
@@ -1929,7 +2031,7 @@ textarea {
     color: #334155;
   }
 
-  .mobile-nav button:nth-child(4),
+  .mobile-nav button:nth-child(5),
   .mobile-nav button.active {
     background: #0f766e;
     color: #fff;
@@ -1937,6 +2039,15 @@ textarea {
 
   .monthly-history-row {
     grid-template-columns: 1fr;
+  }
+
+  .account-row {
+    grid-template-columns: 1fr;
+  }
+
+  .account-row > b,
+  .credit-values {
+    text-align: left;
   }
 
   .internal-alert {

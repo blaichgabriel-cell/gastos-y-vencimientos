@@ -2,6 +2,8 @@ export type ExpenseStatus = "pending" | "due_today" | "upcoming" | "overdue" | "
 export type ExpenseRecurrence = "none" | "monthly";
 export type TransactionType = "expense" | "income";
 export type ExpenseKind = "fixed" | "variable";
+export type MovementKind = "normal" | "card_payment";
+export type FinancialAccountType = "bank" | "cash" | "savings" | "investment" | "credit_card" | "debt";
 
 export type Expense = {
   id: string;
@@ -10,6 +12,9 @@ export type Expense = {
   amount: number;
   transaction_type: TransactionType;
   expense_kind: ExpenseKind | null;
+  movement_kind: MovementKind;
+  account_id: string | null;
+  payment_target_account_id: string | null;
   client_token: string | null;
   category: string;
   due_date: string;
@@ -26,9 +31,40 @@ export type ExpenseInput = {
   amount: string;
   transaction_type: TransactionType;
   expense_kind: ExpenseKind;
+  movement_kind: MovementKind;
+  account_id: string;
+  payment_target_account_id: string;
   category: string;
   due_date: string;
   recurrence: ExpenseRecurrence;
+  notes: string;
+};
+
+export type FinancialAccount = {
+  id: string;
+  user_id: string;
+  name: string;
+  institution: string | null;
+  account_type: FinancialAccountType;
+  balance: number;
+  credit_limit: number;
+  credit_used: number;
+  statement_day: number | null;
+  due_day: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FinancialAccountInput = {
+  name: string;
+  institution: string;
+  account_type: FinancialAccountType;
+  balance: string;
+  credit_limit: string;
+  credit_used: string;
+  statement_day: string;
+  due_day: string;
   notes: string;
 };
 
