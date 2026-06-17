@@ -198,6 +198,8 @@ export function ExpenseApp() {
   const variablePercent = totalExpenseKinds > 0 ? 100 - fixedPercent : 0;
   const cashflowMax = Math.max(summary.income, summary.expenses, 1);
   const balanceTone = balance >= 0 ? "positive" : "negative";
+  const overdueCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "overdue").length;
+  const dueTodayCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "due_today").length;
   const spendingRatio = summary.income > 0 ? Math.round((summary.expenses / summary.income) * 100) : summary.expenses > 0 ? 100 : 0;
   const savingRate = summary.income > 0 ? Math.round((balance / summary.income) * 100) : 0;
   const healthLabel = balance < 0
@@ -384,8 +386,6 @@ export function ExpenseApp() {
     router.replace("/auth");
   }
 
-  const overdueCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "overdue").length;
-  const dueTodayCount = periodExpenses.filter((expense) => getTransactionType(expense) === "expense" && getComputedStatus(expense) === "due_today").length;
   const nextExpenses = periodExpenses
     .filter((expense) => {
       if (getTransactionType(expense) === "income") return false;
