@@ -1029,9 +1029,15 @@ textarea {
   font-weight: 900;
 }
 
-.executive-grid {
+.executive-overview {
   display: grid;
-  grid-template-columns: minmax(320px, 1.75fr) repeat(5, minmax(136px, 0.52fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.executive-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -1049,14 +1055,14 @@ textarea {
 
 .executive-balance {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(230px, 0.85fr) minmax(150px, 0.42fr);
+  grid-template-columns: minmax(260px, 1.2fr) minmax(300px, 1fr) minmax(240px, 0.85fr);
   align-items: stretch;
-  gap: 18px;
+  gap: 12px;
   background:
     radial-gradient(circle at top right, rgba(45, 212, 191, 0.2), transparent 36%),
     linear-gradient(135deg, #0f172a, #164e63);
   color: #fff;
-  padding: 22px;
+  padding: 24px;
 }
 
 .executive-balance.negative {
@@ -1074,7 +1080,7 @@ textarea {
 .executive-balance strong {
   display: block;
   margin: 10px 0 6px;
-  font-size: clamp(34px, 4.4vw, 54px);
+  font-size: clamp(36px, 4vw, 56px);
   line-height: 1;
   white-space: nowrap;
 }
@@ -1098,7 +1104,7 @@ textarea {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  align-content: end;
+  align-content: stretch;
 }
 
 .balance-detail-grid span,
@@ -1121,11 +1127,22 @@ textarea {
 
 .balance-detail-grid b,
 .balance-health b {
-  overflow: hidden;
   color: #fff;
   font-size: 15px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.balance-health {
+  gap: 4px;
+}
+
+.balance-health p,
+.balance-health span {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .balance-health.negative {
@@ -1134,7 +1151,7 @@ textarea {
 }
 
 .balance-ring {
-  display: grid;
+  display: none;
   place-items: center;
   flex: 0 0 auto;
   width: 112px;
@@ -1161,7 +1178,7 @@ textarea {
   display: grid;
   align-content: space-between;
   min-width: 0;
-  min-height: 142px;
+  min-height: 116px;
   padding: 16px;
   transition: border-color 0.18s ease, transform 0.18s ease;
 }
@@ -1183,10 +1200,9 @@ textarea {
 }
 
 .executive-metric strong {
-  overflow: hidden;
-  font-size: clamp(18px, 1.4vw, 22px);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: clamp(18px, 1.6vw, 24px);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .executive-metric.paid svg {
@@ -1211,7 +1227,7 @@ textarea {
 
 .finance-insights {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.15fr) repeat(2, minmax(230px, 1fr));
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -1226,8 +1242,8 @@ textarea {
 
 .donut-layout {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 14px;
   align-items: center;
 }
 
@@ -1238,6 +1254,7 @@ textarea {
   justify-items: center;
   width: 132px;
   height: 132px;
+  justify-self: center;
   border-radius: 50%;
   text-align: center;
 }
@@ -1325,6 +1342,7 @@ textarea {
 
 .chart-legend {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1369,7 +1387,7 @@ textarea {
 .chart-legend strong {
   margin-top: 2px;
   overflow-wrap: anywhere;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .cashflow-bars,
@@ -1691,7 +1709,7 @@ textarea {
     display: none;
   }
 
-  .executive-grid {
+  .executive-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1722,7 +1740,7 @@ textarea {
     display: none;
   }
 
-  .executive-grid,
+  .executive-kpis,
   .finance-insights,
   .executive-filters,
   .executive-content {
@@ -1749,6 +1767,10 @@ textarea {
   }
 
   .balance-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .executive-balance {
     grid-template-columns: 1fr;
   }
 
@@ -1824,9 +1846,9 @@ textarea {
     white-space: normal;
   }
 
-  .balance-ring {
-    width: 92px;
-    height: 92px;
+  .balance-detail-grid,
+  .chart-legend {
+    grid-template-columns: 1fr;
   }
 
   .executive-metric {

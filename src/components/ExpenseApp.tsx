@@ -57,6 +57,24 @@ function formatGuaraniInput(value: string | number) {
   }).format(amount);
 }
 
+function formatCompactCurrency(amount: number) {
+  const sign = amount < 0 ? "-" : "";
+  const value = Math.abs(amount);
+  if (value >= 1000000) {
+    const compact = new Intl.NumberFormat("es-PY", {
+      maximumFractionDigits: value >= 10000000 ? 0 : 1
+    }).format(value / 1000000);
+    return `${sign}Gs. ${compact} M`;
+  }
+  if (value >= 100000) {
+    const compact = new Intl.NumberFormat("es-PY", {
+      maximumFractionDigits: 0
+    }).format(value / 1000);
+    return `${sign}Gs. ${compact} mil`;
+  }
+  return formatCurrency(amount);
+}
+
 function createDefaultForm(): ExpenseForm {
   return {
     title: "",
@@ -180,6 +198,22 @@ export function ExpenseApp() {
   const variablePercent = totalExpenseKinds > 0 ? 100 - fixedPercent : 0;
   const cashflowMax = Math.max(summary.income, summary.expenses, 1);
   const balanceTone = balance >= 0 ? "positive" : "negative";
+  const spendingRatio = summary.income > 0 ? Math.round((summary.expenses / summary.income) * 100) : summary.expenses > 0 ? 100 : 0;
+  const savingRate = summary.income > 0 ? Math.round((balance / summary.income) * 100) : 0;
+  const healthLabel = balance < 0
+    ? "Balance negativo"
+    : overdueCount > 0
+      ? "Pagos vencidos"
+      : spendingRatio > 85
+        ? "Gastos altos"
+        : "Mes controlado";
+  const healthCopy = balance < 0
+    ? "Tus gastos superan tus ingresos en este periodo."
+    : overdueCount > 0
+      ? "Hay pagos que necesitan atencion inmediata."
+      : spendingRatio > 85
+        ? "Estas usando gran parte de tus ingresos."
+        : "Tus ingresos cubren bien los gastos visibles.";
 
   const categoryBreakdown = useMemo(() => {
     const totals = new Map<string, number>();
@@ -412,34 +446,51 @@ export function ExpenseApp() {
           </div>
         </header>
 
-        <section className="executive-grid" id="resumen">
+        <section className="executive-overview" id="resumen">
           <article className={`executive-balance ${balanceTone}`}>
-            <div>
+            <div className="balance-copy">
               <span>Balance disponible</span>
-              <strong>{formatCurrency(balance)}</strong>
-              <small>{periodExpenses.length} visibles de {expenses.length} guardados</small>
-              <small>{formatCurrency(summary.income)} ingresos / {formatCurrency(summary.expenses)} gastos</small>
+              <strong>{formatCompactCurrency(balance)}</strong>
+              <small>{formatCurrency(balance)}</small>
             </div>
-            <div className="balance-ring">
-              <b>{overdueCount}</b>
-              <small>vencidos</small>
+            <div className="balance-detail-grid">
+              <span>
+                <small>Ingresos</small>
+                <b>{formatCompactCurrency(summary.income)}</b>
+              </span>
+              <span>
+                <small>Gastos</small>
+                <b>{formatCompactCurrency(summary.expenses)}</b>
+              </span>
+              <span>
+                <small>Movimientos</small>
+                <b>{periodExpenses.length} / {expenses.length}</b>
+              </span>
+            </div>
+            <div className={`balance-health ${balanceTone}`}>
+              <small>Estado</small>
+              <b>{healthLabel}</b>
+              <p>{healthCopy}</p>
+              <span>{spendingRatio}% usado / {savingRate}% ahorro</span>
             </div>
           </article>
+        </section>
 
+        <section className="executive-kpis" aria-label="Indicadores principales">
           <article className="executive-metric paid">
             <CircleDollarSign size={20} />
             <span>Ingresos</span>
-            <strong>{formatCurrency(summary.income)}</strong>
+            <strong title={formatCurrency(summary.income)}>{formatCompactCurrency(summary.income)}</strong>
           </article>
           <article className="executive-metric fixed">
             <WalletCards size={20} />
             <span>Gastos fijos</span>
-            <strong>{formatCurrency(summary.fixed)}</strong>
+            <strong title={formatCurrency(summary.fixed)}>{formatCompactCurrency(summary.fixed)}</strong>
           </article>
           <article className="executive-metric variable">
             <WalletCards size={20} />
             <span>Gastos variables</span>
-            <strong>{formatCurrency(summary.variable)}</strong>
+            <strong title={formatCurrency(summary.variable)}>{formatCompactCurrency(summary.variable)}</strong>
           </article>
           <article className="executive-metric upcoming">
             <CalendarDays size={20} />
@@ -508,12 +559,12 @@ export function ExpenseApp() {
               </div>
               <div className="donut-layout">
                 <div
-                  className="expense-donut"
-                  style={{ background: `conic-gradient(#0f766e 0 ${fixedPercent}%, #2563eb ${fixedPercent}% 100%)` }}
+                  className={`expense-donut ${totalExpenseKinds === 0 ? "empty" : ""}`}
+                  style={{ background: totalExpenseKinds === 0 ? "#e8eef5" : `conic-gradient(#0f766e 0 ${fixedPercent}%, #2563eb ${fixedPercent}% 100%)` }}
                   aria-label={`${fixedPercent}% gastos fijos y ${variablePercent}% gastos variables`}
                 >
-                  <span>{variablePercent}%</span>
-                  <small>variable</small>
+                  <span>{totalExpenseKinds === 0 ? "0" : `${variablePercent}%`}</span>
+                  <small>{totalExpenseKinds === 0 ? "sin gastos" : "variable"}</small>
                 </div>
                 <div className="chart-legend">
                   <div>
