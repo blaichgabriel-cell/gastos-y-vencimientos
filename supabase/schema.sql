@@ -6,6 +6,7 @@ create table if not exists public.expenses (
   title text not null,
   amount numeric(12, 2) not null check (amount > 0),
   transaction_type text not null default 'expense' check (transaction_type in ('expense', 'income')),
+  expense_kind text check (expense_kind in ('fixed', 'variable')),
   client_token text,
   category text not null,
   due_date date not null,
@@ -23,6 +24,14 @@ check (transaction_type in ('expense', 'income'));
 
 alter table public.expenses
 add column if not exists client_token text;
+
+alter table public.expenses
+add column if not exists expense_kind text
+check (expense_kind in ('fixed', 'variable'));
+
+update public.expenses
+set expense_kind = case when recurrence = 'monthly' then 'fixed' else 'variable' end
+where transaction_type = 'expense' and expense_kind is null;
 
 create table if not exists public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -66,6 +75,7 @@ with check (auth.uid() = user_id);
 
 create index if not exists expenses_user_due_date_idx on public.expenses (user_id, due_date);
 create index if not exists expenses_user_category_idx on public.expenses (user_id, category);
+create index if not exists expenses_user_kind_idx on public.expenses (user_id, expense_kind);
 create unique index if not exists expenses_user_client_token_uidx
 on public.expenses (user_id, client_token)
 where client_token is not null;

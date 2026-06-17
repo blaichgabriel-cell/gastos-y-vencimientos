@@ -20,6 +20,7 @@ import type { Session } from "@supabase/supabase-js";
 import {
   categories,
   Expense,
+  ExpenseKind,
   ExpenseStatus,
   formatCurrency,
   getComputedStatus,
@@ -32,6 +33,7 @@ type ExpenseForm = {
   title: string;
   amount: string;
   transaction_type: "expense" | "income";
+  expense_kind: ExpenseKind;
   client_token: string;
   category: string;
   due_date: string;
@@ -57,6 +59,7 @@ function createDefaultForm(): ExpenseForm {
     title: "",
     amount: "",
     transaction_type: "expense",
+    expense_kind: "variable",
     client_token: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
     category: "Servicios",
     due_date: new Date().toISOString().slice(0, 10),
@@ -81,6 +84,10 @@ function getTransactionType(expense: Expense) {
   return expense.transaction_type || "expense";
 }
 
+function getExpenseKind(expense: Expense) {
+  return expense.expense_kind ?? (expense.recurrence === "monthly" ? "fixed" : "variable");
+}
+
 export function ExpenseApp() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -92,6 +99,7 @@ export function ExpenseApp() {
   const [showForm, setShowForm] = useState(false);
   const [month, setMonth] = useState("all");
   const [transactionFilter, setTransactionFilter] = useState<"all" | "expense" | "income">("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "fixed" | "variable">("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
   const [activeView, setActiveView] = useState<"panel" | "vencimientos" | "alertas">("panel");
@@ -135,10 +143,11 @@ export function ExpenseApp() {
       return (
         (month === "all" || expense.due_date.startsWith(month)) &&
         (transactionFilter === "all" || transactionType === transactionFilter) &&
+        (kindFilter === "all" || (transactionType === "expense" && getExpenseKind(expense) === kindFilter)) &&
         (category === "all" || expense.category === category)
       );
     });
-  }, [expenses, month, transactionFilter, category]);
+  }, [expenses, month, transactionFilter, kindFilter, category]);
 
   const summary = useMemo(() => {
     return periodExpenses.reduce(
@@ -150,13 +159,15 @@ export function ExpenseApp() {
         }
 
         acc.expenses += Number(expense.amount);
+        if (getExpenseKind(expense) === "fixed") acc.fixed += Number(expense.amount);
+        else acc.variable += Number(expense.amount);
         const computed = getComputedStatus(expense);
         if (computed === "paid") acc.paid += Number(expense.amount);
         else acc.pending += Number(expense.amount);
         if (computed === "due_today" || computed === "upcoming") acc.upcoming += 1;
         return acc;
       },
-      { income: 0, expenses: 0, pending: 0, paid: 0, upcoming: 0 }
+      { income: 0, expenses: 0, fixed: 0, variable: 0, pending: 0, paid: 0, upcoming: 0 }
     );
   }, [periodExpenses]);
 
@@ -206,6 +217,7 @@ export function ExpenseApp() {
         title: form.title.trim(),
         amount: parsedAmount,
         transaction_type: form.transaction_type,
+        expense_kind: isIncome ? null : form.expense_kind,
         client_token: existing?.client_token ?? form.client_token,
         category: form.category,
         due_date: form.due_date,
@@ -265,6 +277,7 @@ export function ExpenseApp() {
       title: expense.title,
       amount: formatGuaraniInput(Number(expense.amount)),
       transaction_type: getTransactionType(expense),
+      expense_kind: getExpenseKind(expense),
       client_token: expense.client_token ?? (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`),
       category: expense.category,
       due_date: expense.due_date,
@@ -396,8 +409,13 @@ export function ExpenseApp() {
           </article>
           <article className="executive-metric paid">
             <WalletCards size={20} />
-            <span>Pendiente</span>
-            <strong>{formatCurrency(summary.pending)}</strong>
+            <span>Fijos</span>
+            <strong>{formatCurrency(summary.fixed)}</strong>
+          </article>
+          <article className="executive-metric variable">
+            <WalletCards size={20} />
+            <span>Variables</span>
+            <strong>{formatCurrency(summary.variable)}</strong>
           </article>
           <article className="executive-metric upcoming">
             <CalendarDays size={20} />
@@ -433,6 +451,14 @@ export function ExpenseApp() {
               <option value="all">Todos</option>
               <option value="expense">Gastos</option>
               <option value="income">Ingresos</option>
+            </select>
+          </label>
+          <label>
+            Clase
+            <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as "all" | "fixed" | "variable")}>
+              <option value="all">Todas</option>
+              <option value="fixed">Gastos fijos</option>
+              <option value="variable">Gastos variables</option>
             </select>
           </label>
           <label>
@@ -486,6 +512,7 @@ export function ExpenseApp() {
               {periodExpenses.map((expense) => {
                 const computed = getComputedStatus(expense);
                 const transactionType = getTransactionType(expense);
+                const expenseKind = getExpenseKind(expense);
                 return (
                   <article className={`executive-row ${computed} ${transactionType}`} key={expense.id}>
                     {transactionType === "income" ? (
@@ -497,7 +524,7 @@ export function ExpenseApp() {
                     )}
                     <div className="row-title">
                       <h3>{expense.title}</h3>
-                      <span>{transactionType === "income" ? "Ingreso" : "Gasto"} / {expense.category}</span>
+                      <span>{transactionType === "income" ? "Ingreso" : expenseKind === "fixed" ? "Gasto fijo" : "Gasto variable"} / {expense.category}</span>
                     </div>
                     <strong className={transactionType === "income" ? "income-amount" : ""}>
                       {transactionType === "income" ? "+" : ""}{formatCurrency(Number(expense.amount))}
@@ -505,6 +532,9 @@ export function ExpenseApp() {
                     <span>{new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}</span>
                     <div className="row-pills">
                       <span className="status-pill">{transactionType === "income" ? "Ingreso" : statusLabels[computed]}</span>
+                      {transactionType === "expense" ? (
+                        <span className="kind-pill">{expenseKind === "fixed" ? "Fijo" : "Variable"}</span>
+                      ) : null}
                       {expense.recurrence === "monthly" ? <span className="repeat-pill">Mensual</span> : null}
                     </div>
                     <div className="row-actions">
@@ -563,6 +593,9 @@ export function ExpenseApp() {
               </div>
               <form className="executive-form" onSubmit={saveExpense} autoComplete="off">
                 <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
+                {form.transaction_type === "expense" ? (
+                  <label>Clase<select value={form.expense_kind} onChange={(e) => setForm({ ...form, expense_kind: e.target.value as ExpenseKind })}><option value="variable">Variable / ocasional</option><option value="fixed">Fijo</option></select></label>
+                ) : null}
                 <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
                 <label>Monto<input autoComplete="off" inputMode="numeric" name="movement_amount" placeholder="0" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
                 <label>Categoria<select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{(form.transaction_type === "income" ? incomeCategories : categories).map((item) => <option key={item}>{item}</option>)}</select></label>

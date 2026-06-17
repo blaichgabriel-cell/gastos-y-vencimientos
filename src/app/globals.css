@@ -799,6 +799,15 @@ textarea {
   font-weight: 900;
 }
 
+.kind-pill {
+  border-radius: 999px;
+  background: #eef8f6;
+  color: var(--brand-dark);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 @media (max-width: 860px) {
   .money-hero,
   .metric-row,
@@ -864,6 +873,7 @@ textarea {
   }
 
   .status-pill,
+  .kind-pill,
   .repeat-pill {
     padding-inline: 8px;
   }
@@ -1019,7 +1029,7 @@ textarea {
 
 .executive-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) repeat(4, minmax(140px, 0.5fr));
+  grid-template-columns: minmax(0, 1.7fr) repeat(5, minmax(124px, 0.45fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -1115,9 +1125,13 @@ textarea {
   color: var(--overdue);
 }
 
+.executive-metric.variable svg {
+  color: #2563eb;
+}
+
 .executive-filters {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 12px;
   padding: 14px;

@@ -1,6 +1,7 @@
 export type ExpenseStatus = "pending" | "due_today" | "upcoming" | "overdue" | "paid";
 export type ExpenseRecurrence = "none" | "monthly";
 export type TransactionType = "expense" | "income";
+export type ExpenseKind = "fixed" | "variable";
 
 export type Expense = {
   id: string;
@@ -8,6 +9,7 @@ export type Expense = {
   title: string;
   amount: number;
   transaction_type: TransactionType;
+  expense_kind: ExpenseKind | null;
   client_token: string | null;
   category: string;
   due_date: string;
@@ -23,6 +25,7 @@ export type ExpenseInput = {
   title: string;
   amount: string;
   transaction_type: TransactionType;
+  expense_kind: ExpenseKind;
   category: string;
   due_date: string;
   recurrence: ExpenseRecurrence;
@@ -69,6 +72,12 @@ export const categories = [
   "Seguro",
   "Impuestos",
   "Supermercado",
+  "Combustible",
+  "Restaurante",
+  "Delivery",
+  "Compras",
+  "Mascotas",
+  "Regalos",
   "Comida",
   "Transporte",
   "Salud",
