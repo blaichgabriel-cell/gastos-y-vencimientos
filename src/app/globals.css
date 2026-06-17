@@ -882,8 +882,8 @@ textarea {
 .executive-shell {
   min-height: 100svh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  background: #f4f6f8;
+  grid-template-columns: 284px minmax(0, 1fr);
+  background: #eef2f6;
 }
 
 .executive-sidebar {
@@ -893,8 +893,10 @@ textarea {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 28px;
-  border-right: 1px solid #dbe2ea;
-  background: #111827;
+  border-right: 1px solid rgba(219, 226, 234, 0.16);
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.16), transparent 34%),
+    #0f172a;
   color: #fff;
   padding: 24px;
 }
@@ -984,7 +986,7 @@ textarea {
 
 .executive-main {
   min-width: 0;
-  padding: 24px;
+  padding: 26px;
 }
 
 .executive-topbar {
@@ -1042,7 +1044,7 @@ textarea {
   border: 1px solid #dbe2ea;
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 16px 36px rgba(17, 24, 39, 0.06);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.07);
 }
 
 .executive-balance {
@@ -1050,9 +1052,17 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  background: linear-gradient(135deg, #111827, #1e3a46);
+  background:
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.2), transparent 36%),
+    linear-gradient(135deg, #0f172a, #164e63);
   color: #fff;
   padding: 22px;
+}
+
+.executive-balance.negative {
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.22), transparent 36%),
+    linear-gradient(135deg, #111827, #7f1d1d);
 }
 
 .executive-balance span,
@@ -1076,9 +1086,13 @@ textarea {
   width: 112px;
   height: 112px;
   border: 10px solid rgba(255, 255, 255, 0.18);
-  border-top-color: #f87171;
+  border-top-color: #14b8a6;
   border-radius: 50%;
   text-align: center;
+}
+
+.executive-balance.negative .balance-ring {
+  border-top-color: #f87171;
 }
 
 .balance-ring b {
@@ -1095,6 +1109,12 @@ textarea {
   min-width: 0;
   min-height: 142px;
   padding: 16px;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.executive-metric:hover,
+.executive-card:hover {
+  border-color: #c5d0dc;
 }
 
 .executive-metric svg {
@@ -1117,6 +1137,10 @@ textarea {
   color: var(--paid);
 }
 
+.executive-metric.fixed svg {
+  color: #0f766e;
+}
+
 .executive-metric.upcoming svg {
   color: var(--upcoming);
 }
@@ -1127,6 +1151,171 @@ textarea {
 
 .executive-metric.variable svg {
   color: #2563eb;
+}
+
+.finance-insights {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.insight-card {
+  min-height: 238px;
+}
+
+.insight-card .card-heading svg {
+  color: #64748b;
+}
+
+.donut-layout {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.expense-donut {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+}
+
+.expense-donut::after {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.expense-donut span,
+.expense-donut small {
+  position: relative;
+  z-index: 1;
+}
+
+.expense-donut span {
+  font-size: 25px;
+  font-weight: 900;
+}
+
+.expense-donut small {
+  margin-top: 28px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.chart-legend {
+  display: grid;
+  gap: 10px;
+}
+
+.chart-legend div {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  column-gap: 9px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.fixed-dot {
+  background: #0f766e;
+}
+
+.variable-dot {
+  background: #2563eb;
+}
+
+.chart-legend p,
+.chart-legend strong {
+  grid-column: 2;
+  margin: 0;
+}
+
+.chart-legend p,
+.cashflow-bars span,
+.category-bars span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chart-legend strong {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+
+.cashflow-bars,
+.category-bars {
+  display: grid;
+  gap: 13px;
+}
+
+.cashflow-bars > div,
+.category-bars > div {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) minmax(102px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.bar-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef5;
+}
+
+.bar-track b {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: #0f766e;
+}
+
+.income-bar {
+  background: #17803d !important;
+}
+
+.expense-bar {
+  background: #2563eb !important;
+}
+
+.danger-bar {
+  background: #dc2626 !important;
+}
+
+.cashflow-bars strong,
+.category-bars strong {
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: 13px;
+}
+
+.positive-amount,
+.income-amount {
+  color: var(--paid);
+}
+
+.negative-amount,
+.expense-amount {
+  color: #991b1b;
 }
 
 .executive-filters {
@@ -1177,10 +1366,16 @@ textarea {
   gap: 12px;
   align-items: center;
   border: 1px solid #e2e8f0;
-  border-left: 5px solid var(--pending);
+  border-left: 4px solid var(--pending);
   border-radius: 8px;
-  background: #fbfcfd;
-  padding: 10px;
+  background: #fff;
+  padding: 12px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.executive-row:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
 }
 
 .executive-row.paid {
@@ -1205,9 +1400,9 @@ textarea {
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid #bde8c9;
+  border: 1px solid #bbf7d0;
   border-radius: 8px;
-  background: #e7f7ec;
+  background: #ecfdf3;
   color: var(--paid);
 }
 
@@ -1219,6 +1414,7 @@ textarea {
   margin: 0 0 4px;
   overflow-wrap: anywhere;
   font-size: 15px;
+  font-weight: 900;
 }
 
 .row-title span,
@@ -1229,6 +1425,7 @@ textarea {
 
 .executive-row > strong {
   white-space: nowrap;
+  font-size: 15px;
 }
 
 .executive-row > strong.income-amount {
@@ -1386,7 +1583,15 @@ textarea {
     grid-template-columns: repeat(3, 1fr);
   }
 
+  .finance-insights {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .executive-balance {
+    grid-column: 1 / -1;
+  }
+
+  .split-card {
     grid-column: 1 / -1;
   }
 }
@@ -1405,9 +1610,14 @@ textarea {
   }
 
   .executive-grid,
+  .finance-insights,
   .executive-filters,
   .executive-content {
     grid-template-columns: 1fr;
+  }
+
+  .split-card {
+    grid-column: auto;
   }
 
   .executive-row {
@@ -1503,5 +1713,20 @@ textarea {
 
   .executive-form .full {
     grid-column: 1;
+  }
+
+  .donut-layout,
+  .cashflow-bars > div,
+  .category-bars > div {
+    grid-template-columns: 1fr;
+  }
+
+  .expense-donut {
+    justify-self: center;
+  }
+
+  .cashflow-bars strong,
+  .category-bars strong {
+    text-align: left;
   }
 }

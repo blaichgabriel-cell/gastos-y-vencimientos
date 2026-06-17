@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  BarChart3,
   Bell,
   CalendarDays,
   Check,
@@ -11,7 +12,9 @@ import {
   Edit2,
   Filter,
   LogOut,
+  PieChart,
   Plus,
+  TrendingUp,
   Trash2,
   WalletCards,
   X
@@ -172,6 +175,26 @@ export function ExpenseApp() {
   }, [periodExpenses]);
 
   const balance = summary.income - summary.expenses;
+  const totalExpenseKinds = summary.fixed + summary.variable;
+  const fixedPercent = totalExpenseKinds > 0 ? Math.round((summary.fixed / totalExpenseKinds) * 100) : 0;
+  const variablePercent = totalExpenseKinds > 0 ? 100 - fixedPercent : 0;
+  const cashflowMax = Math.max(summary.income, summary.expenses, 1);
+  const balanceTone = balance >= 0 ? "positive" : "negative";
+
+  const categoryBreakdown = useMemo(() => {
+    const totals = new Map<string, number>();
+    periodExpenses.forEach((expense) => {
+      if (getTransactionType(expense) !== "expense") return;
+      totals.set(expense.category, (totals.get(expense.category) ?? 0) + Number(expense.amount));
+    });
+
+    return Array.from(totals.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [periodExpenses]);
+
+  const maxCategoryAmount = Math.max(...categoryBreakdown.map((item) => item.amount), 1);
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
@@ -245,6 +268,7 @@ export function ExpenseApp() {
       });
       setMonth("all");
       setTransactionFilter("all");
+      setKindFilter("all");
       setCategory("all");
       setForm(createDefaultForm());
       setEditingId(null);
@@ -338,7 +362,7 @@ export function ExpenseApp() {
   const hasPaymentAlerts = overdueCount > 0 || dueTodayCount > 0 || summary.upcoming > 0;
 
   const viewCopy = {
-    panel: "Resumen financiero del mes seleccionado.",
+    panel: "Situacion completa del periodo seleccionado.",
     vencimientos: "Gestiona tus pagos, estados y fechas.",
     alertas: "Prioridad de vencimientos cercanos o atrasados."
   };
@@ -375,7 +399,7 @@ export function ExpenseApp() {
         <header className="executive-topbar">
           <div>
             <p className="eyebrow">Panel ejecutivo</p>
-            <h1>Mi Balance</h1>
+            <h1>Situacion del mes</h1>
             <span className="view-subtitle">{viewCopy[activeView]}</span>
           </div>
           <div className="executive-actions">
@@ -389,9 +413,9 @@ export function ExpenseApp() {
         </header>
 
         <section className="executive-grid" id="resumen">
-          <article className="executive-balance">
+          <article className={`executive-balance ${balanceTone}`}>
             <div>
-              <span>Balance del mes</span>
+              <span>Balance disponible</span>
               <strong>{formatCurrency(balance)}</strong>
               <small>{periodExpenses.length} visibles de {expenses.length} guardados</small>
               <small>{formatCurrency(summary.income)} ingresos / {formatCurrency(summary.expenses)} gastos</small>
@@ -407,19 +431,19 @@ export function ExpenseApp() {
             <span>Ingresos</span>
             <strong>{formatCurrency(summary.income)}</strong>
           </article>
-          <article className="executive-metric paid">
+          <article className="executive-metric fixed">
             <WalletCards size={20} />
-            <span>Fijos</span>
+            <span>Gastos fijos</span>
             <strong>{formatCurrency(summary.fixed)}</strong>
           </article>
           <article className="executive-metric variable">
             <WalletCards size={20} />
-            <span>Variables</span>
+            <span>Gastos variables</span>
             <strong>{formatCurrency(summary.variable)}</strong>
           </article>
           <article className="executive-metric upcoming">
             <CalendarDays size={20} />
-            <span>Proximos</span>
+            <span>Proximos pagos</span>
             <strong>{summary.upcoming}</strong>
           </article>
           <article className="executive-metric overdue">
@@ -472,6 +496,97 @@ export function ExpenseApp() {
 
         {notice ? <p className="notice executive-notice">{notice}</p> : null}
 
+        {activeView === "panel" ? (
+          <section className="finance-insights" aria-label="Analisis financiero">
+            <article className="executive-card insight-card split-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">Composicion</p>
+                  <h2>Fijos vs variables</h2>
+                </div>
+                <PieChart size={20} />
+              </div>
+              <div className="donut-layout">
+                <div
+                  className="expense-donut"
+                  style={{ background: `conic-gradient(#0f766e 0 ${fixedPercent}%, #2563eb ${fixedPercent}% 100%)` }}
+                  aria-label={`${fixedPercent}% gastos fijos y ${variablePercent}% gastos variables`}
+                >
+                  <span>{variablePercent}%</span>
+                  <small>variable</small>
+                </div>
+                <div className="chart-legend">
+                  <div>
+                    <span className="legend-dot fixed-dot" />
+                    <p>Gastos fijos</p>
+                    <strong>{formatCurrency(summary.fixed)}</strong>
+                  </div>
+                  <div>
+                    <span className="legend-dot variable-dot" />
+                    <p>Gastos variables</p>
+                    <strong>{formatCurrency(summary.variable)}</strong>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article className="executive-card insight-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">Flujo</p>
+                  <h2>Ingresos vs gastos</h2>
+                </div>
+                <BarChart3 size={20} />
+              </div>
+              <div className="cashflow-bars">
+                <div>
+                  <span>Ingresos</span>
+                  <div className="bar-track">
+                    <b className="income-bar" style={{ width: `${Math.max((summary.income / cashflowMax) * 100, summary.income ? 8 : 0)}%` }} />
+                  </div>
+                  <strong>{formatCurrency(summary.income)}</strong>
+                </div>
+                <div>
+                  <span>Gastos</span>
+                  <div className="bar-track">
+                    <b className="expense-bar" style={{ width: `${Math.max((summary.expenses / cashflowMax) * 100, summary.expenses ? 8 : 0)}%` }} />
+                  </div>
+                  <strong>{formatCurrency(summary.expenses)}</strong>
+                </div>
+                <div>
+                  <span>Resultado</span>
+                  <div className="bar-track">
+                    <b className={balance >= 0 ? "income-bar" : "danger-bar"} style={{ width: `${Math.max((Math.abs(balance) / cashflowMax) * 100, balance ? 8 : 0)}%` }} />
+                  </div>
+                  <strong className={balance >= 0 ? "positive-amount" : "negative-amount"}>{formatCurrency(balance)}</strong>
+                </div>
+              </div>
+            </article>
+
+            <article className="executive-card insight-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">Categorias</p>
+                  <h2>Mayores gastos</h2>
+                </div>
+                <TrendingUp size={20} />
+              </div>
+              <div className="category-bars">
+                {categoryBreakdown.length === 0 ? <p className="empty-side">Sin gastos para graficar.</p> : null}
+                {categoryBreakdown.map((item) => (
+                  <div key={item.name}>
+                    <span>{item.name}</span>
+                    <div className="bar-track">
+                      <b style={{ width: `${Math.max((item.amount / maxCategoryAmount) * 100, 8)}%` }} />
+                    </div>
+                    <strong>{formatCurrency(item.amount)}</strong>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        ) : null}
+
         {hasPaymentAlerts ? (
           <section className={`internal-alert ${overdueCount > 0 ? "danger" : dueTodayCount > 0 ? "today" : "upcoming"}`}>
             <div>
@@ -496,7 +611,7 @@ export function ExpenseApp() {
             <div className="card-heading">
               <div>
                 <p className="eyebrow">Movimientos</p>
-                <h2>Movimientos del mes</h2>
+                <h2>Movimientos recientes</h2>
               </div>
               <button className="small-action" onClick={openCreateForm} type="button">
                 <Plus size={16} /> Nuevo
@@ -526,8 +641,8 @@ export function ExpenseApp() {
                       <h3>{expense.title}</h3>
                       <span>{transactionType === "income" ? "Ingreso" : expenseKind === "fixed" ? "Gasto fijo" : "Gasto variable"} / {expense.category}</span>
                     </div>
-                    <strong className={transactionType === "income" ? "income-amount" : ""}>
-                      {transactionType === "income" ? "+" : ""}{formatCurrency(Number(expense.amount))}
+                    <strong className={transactionType === "income" ? "income-amount" : "expense-amount"}>
+                      {transactionType === "income" ? "+" : "-"}{formatCurrency(Number(expense.amount))}
                     </strong>
                     <span>{new Date(`${expense.due_date}T00:00:00`).toLocaleDateString("es-PY")}</span>
                     <div className="row-pills">
