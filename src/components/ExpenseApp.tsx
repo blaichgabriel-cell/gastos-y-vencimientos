@@ -44,6 +44,16 @@ type ExpenseForm = {
   notes: string;
 };
 
+type MonthlyReport = {
+  month: string;
+  income: number;
+  expenses: number;
+  fixed: number;
+  variable: number;
+  balance: number;
+  movements: number;
+};
+
 function parseGuaraniAmount(value: string) {
   const digitsOnly = value.replace(/\D/g, "");
   return digitsOnly ? Number(digitsOnly) : 0;
@@ -91,6 +101,37 @@ function getExpenseKind(expense: Expense) {
   return expense.expense_kind ?? (expense.recurrence === "monthly" ? "fixed" : "variable");
 }
 
+function getMonthLabel(monthKey: string) {
+  return new Date(`${monthKey}-01T00:00:00`).toLocaleDateString("es-PY", {
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function getPreviousMonthKey(monthKey: string) {
+  const [year, monthNumber] = monthKey.split("-").map(Number);
+  const date = new Date(year, monthNumber - 2, 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function createEmptyReport(monthKey: string): MonthlyReport {
+  return {
+    month: monthKey,
+    income: 0,
+    expenses: 0,
+    fixed: 0,
+    variable: 0,
+    balance: 0,
+    movements: 0
+  };
+}
+
+function getReportStatus(balanceAmount: number) {
+  if (balanceAmount > 0) return "Sobro plata";
+  if (balanceAmount < 0) return "Falto plata";
+  return "Quedo justo";
+}
+
 export function ExpenseApp() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -105,7 +146,7 @@ export function ExpenseApp() {
   const [kindFilter, setKindFilter] = useState<"all" | "fixed" | "variable">("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
-  const [activeView, setActiveView] = useState<"panel" | "vencimientos" | "alertas">("panel");
+  const [activeView, setActiveView] = useState<"panel" | "balances" | "vencimientos" | "alertas">("panel");
   const savingRef = useRef(false);
   const loadRequestRef = useRef(0);
 
@@ -213,6 +254,39 @@ export function ExpenseApp() {
   }, [periodExpenses]);
 
   const maxCategoryAmount = Math.max(...categoryBreakdown.map((item) => item.amount), 1);
+
+  const monthlyReports = useMemo(() => {
+    const reports = new Map<string, MonthlyReport>();
+
+    expenses.forEach((expense) => {
+      const reportMonth = expense.due_date.slice(0, 7);
+      const report = reports.get(reportMonth) ?? createEmptyReport(reportMonth);
+      const amount = Number(expense.amount);
+
+      report.movements += 1;
+      if (getTransactionType(expense) === "income") {
+        report.income += amount;
+      } else {
+        report.expenses += amount;
+        if (getExpenseKind(expense) === "fixed") report.fixed += amount;
+        else report.variable += amount;
+      }
+      report.balance = report.income - report.expenses;
+      reports.set(reportMonth, report);
+    });
+
+    return Array.from(reports.values()).sort((a, b) => b.month.localeCompare(a.month));
+  }, [expenses]);
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const previousMonthKey = getPreviousMonthKey(currentMonthKey);
+  const currentReport = monthlyReports.find((report) => report.month === currentMonthKey) ?? createEmptyReport(currentMonthKey);
+  const previousReport = monthlyReports.find((report) => report.month === previousMonthKey) ?? createEmptyReport(previousMonthKey);
+  const reportDelta = {
+    income: currentReport.income - previousReport.income,
+    expenses: currentReport.expenses - previousReport.expenses,
+    balance: currentReport.balance - previousReport.balance
+  };
 
   async function saveExpense(event: React.FormEvent) {
     event.preventDefault();
@@ -379,6 +453,7 @@ export function ExpenseApp() {
 
   const viewCopy = {
     panel: "Situacion completa del periodo seleccionado.",
+    balances: "Cierre automatico por mes y comparacion mensual.",
     vencimientos: "Gestiona tus pagos, estados y fechas.",
     alertas: "Prioridad de vencimientos cercanos o atrasados."
   };
@@ -396,6 +471,9 @@ export function ExpenseApp() {
         <nav className="side-nav" aria-label="Principal">
           <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
             <WalletCards size={18} /> Panel ejecutivo
+          </button>
+          <button className={activeView === "balances" ? "active" : ""} onClick={() => setActiveView("balances")} type="button">
+            <BarChart3 size={18} /> Balances
           </button>
           <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
             <CalendarDays size={18} /> Vencimientos
@@ -428,6 +506,8 @@ export function ExpenseApp() {
           </div>
         </header>
 
+        {activeView !== "balances" ? (
+        <>
         <section className="executive-overview" id="resumen">
           <article className={`executive-balance ${balanceTone}`}>
             <div className="balance-copy">
@@ -525,8 +605,85 @@ export function ExpenseApp() {
             </select>
           </label>
         </section>
+        </>
+        ) : null}
 
         {notice ? <p className="notice executive-notice">{notice}</p> : null}
+
+        {activeView === "balances" ? (
+          <section className="balances-view" aria-label="Balances mensuales">
+            <div className="balance-period-grid">
+              {[currentReport, previousReport].map((report, index) => (
+                <article className={`executive-card month-close-card ${report.balance >= 0 ? "positive" : "negative"}`} key={report.month}>
+                  <div className="card-heading">
+                    <div>
+                      <p className="eyebrow">{index === 0 ? "Mes actual" : "Mes anterior"}</p>
+                      <h2>{getMonthLabel(report.month)}</h2>
+                    </div>
+                    <span className="close-status">{getReportStatus(report.balance)}</span>
+                  </div>
+                  <strong className={report.balance >= 0 ? "positive-amount" : "negative-amount"}>
+                    {formatCurrency(report.balance)}
+                  </strong>
+                  <div className="month-close-details">
+                    <span><small>Ingresos</small><b>{formatCurrency(report.income)}</b></span>
+                    <span><small>Gastos fijos</small><b>{formatCurrency(report.fixed)}</b></span>
+                    <span><small>Gastos variables</small><b>{formatCurrency(report.variable)}</b></span>
+                    <span><small>Total gastado</small><b>{formatCurrency(report.expenses)}</b></span>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <article className="executive-card comparison-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">Comparacion</p>
+                  <h2>Actual vs anterior</h2>
+                </div>
+              </div>
+              <div className="comparison-grid">
+                <span>
+                  <small>Diferencia de ingresos</small>
+                  <b className={reportDelta.income >= 0 ? "positive-amount" : "negative-amount"}>{formatCurrency(reportDelta.income)}</b>
+                </span>
+                <span>
+                  <small>Diferencia de gastos</small>
+                  <b className={reportDelta.expenses <= 0 ? "positive-amount" : "negative-amount"}>{formatCurrency(reportDelta.expenses)}</b>
+                </span>
+                <span>
+                  <small>Diferencia de balance</small>
+                  <b className={reportDelta.balance >= 0 ? "positive-amount" : "negative-amount"}>{formatCurrency(reportDelta.balance)}</b>
+                </span>
+              </div>
+            </article>
+
+            <article className="executive-card monthly-history-card">
+              <div className="card-heading">
+                <div>
+                  <p className="eyebrow">Historial</p>
+                  <h2>Cierres mensuales</h2>
+                </div>
+              </div>
+              {monthlyReports.length === 0 ? (
+                <p className="empty-state">Todavia no hay movimientos para calcular balances mensuales.</p>
+              ) : (
+                <div className="monthly-history">
+                  {monthlyReports.map((report) => (
+                    <div className="monthly-history-row" key={report.month}>
+                      <strong>{getMonthLabel(report.month)}</strong>
+                      <span>{report.movements} movimientos</span>
+                      <span>{formatCurrency(report.income)} ingresos</span>
+                      <span>{formatCurrency(report.expenses)} gastos</span>
+                      <b className={report.balance >= 0 ? "positive-amount" : "negative-amount"}>{formatCurrency(report.balance)}</b>
+                      <em>{getReportStatus(report.balance)}</em>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          </section>
+        ) : null}
 
         {activeView === "panel" ? (
           <section className="finance-insights" aria-label="Analisis financiero">
@@ -619,7 +776,7 @@ export function ExpenseApp() {
           </section>
         ) : null}
 
-        {hasPaymentAlerts ? (
+        {activeView !== "balances" && hasPaymentAlerts ? (
           <section className={`internal-alert ${overdueCount > 0 ? "danger" : dueTodayCount > 0 ? "today" : "upcoming"}`}>
             <div>
               <strong>
@@ -637,6 +794,7 @@ export function ExpenseApp() {
           </section>
         ) : null}
 
+        {activeView !== "balances" ? (
         <section className={`executive-content view-${activeView}`}>
           {(activeView === "panel" || activeView === "vencimientos") ? (
           <article className="executive-card table-card" id="vencimientos">
@@ -725,6 +883,7 @@ export function ExpenseApp() {
           </aside>
           ) : null}
         </section>
+        ) : null}
 
         {showForm ? (
           <section className="executive-modal" role="dialog" aria-modal="true" aria-label="Formulario de movimiento">
@@ -760,6 +919,9 @@ export function ExpenseApp() {
         <nav className="mobile-nav" aria-label="Navegacion movil">
           <button className={activeView === "panel" ? "active" : ""} onClick={() => setActiveView("panel")} type="button">
             <WalletCards size={18} /> Panel
+          </button>
+          <button className={activeView === "balances" ? "active" : ""} onClick={() => setActiveView("balances")} type="button">
+            <BarChart3 size={18} /> Balance
           </button>
           <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
             <CalendarDays size={18} /> Vence

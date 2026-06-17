@@ -1456,6 +1456,107 @@ textarea {
   padding: 14px;
 }
 
+.balances-view {
+  display: grid;
+  gap: 12px;
+}
+
+.balance-period-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.month-close-card {
+  display: grid;
+  gap: 16px;
+}
+
+.month-close-card > strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: clamp(30px, 3vw, 44px);
+  line-height: 1;
+}
+
+.close-status {
+  border-radius: 999px;
+  background: #eef8f6;
+  color: var(--brand-dark);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.month-close-card.negative .close-status {
+  background: #fee2e2;
+  color: var(--overdue);
+}
+
+.month-close-details,
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.comparison-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.month-close-details span,
+.comparison-grid span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 12px;
+}
+
+.month-close-details small,
+.comparison-grid small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.month-close-details b,
+.comparison-grid b {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+
+.monthly-history {
+  display: grid;
+  gap: 8px;
+}
+
+.monthly-history-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.1fr) 110px minmax(130px, 1fr) minmax(130px, 1fr) minmax(130px, 1fr) 110px;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.monthly-history-row span,
+.monthly-history-row em {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.monthly-history-row b {
+  overflow-wrap: anywhere;
+}
+
 .executive-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -1717,6 +1818,16 @@ textarea {
     grid-template-columns: 1fr 1fr;
   }
 
+  .balance-period-grid,
+  .month-close-details,
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-history-row {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  }
+
   .executive-balance {
     grid-column: 1 / -1;
     grid-template-columns: 1fr;
@@ -1742,6 +1853,9 @@ textarea {
 
   .executive-kpis,
   .finance-insights,
+  .balance-period-grid,
+  .month-close-details,
+  .comparison-grid,
   .executive-filters,
   .executive-content {
     grid-template-columns: 1fr;
@@ -1785,7 +1899,7 @@ textarea {
     left: 12px;
     z-index: 8;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     border: 1px solid #dbe2ea;
     border-radius: 8px;
@@ -1815,10 +1929,14 @@ textarea {
     color: #334155;
   }
 
-  .mobile-nav button:nth-child(3),
+  .mobile-nav button:nth-child(4),
   .mobile-nav button.active {
     background: #0f766e;
     color: #fff;
+  }
+
+  .monthly-history-row {
+    grid-template-columns: 1fr;
   }
 
   .internal-alert {
