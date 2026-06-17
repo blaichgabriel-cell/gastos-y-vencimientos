@@ -57,24 +57,6 @@ function formatGuaraniInput(value: string | number) {
   }).format(amount);
 }
 
-function formatCompactCurrency(amount: number) {
-  const sign = amount < 0 ? "-" : "";
-  const value = Math.abs(amount);
-  if (value >= 1000000) {
-    const compact = new Intl.NumberFormat("es-PY", {
-      maximumFractionDigits: value >= 10000000 ? 0 : 1
-    }).format(value / 1000000);
-    return `${sign}Gs. ${compact} M`;
-  }
-  if (value >= 100000) {
-    const compact = new Intl.NumberFormat("es-PY", {
-      maximumFractionDigits: 0
-    }).format(value / 1000);
-    return `${sign}Gs. ${compact} mil`;
-  }
-  return formatCurrency(amount);
-}
-
 function createDefaultForm(): ExpenseForm {
   return {
     title: "",
@@ -450,17 +432,16 @@ export function ExpenseApp() {
           <article className={`executive-balance ${balanceTone}`}>
             <div className="balance-copy">
               <span>Balance disponible</span>
-              <strong>{formatCompactCurrency(balance)}</strong>
-              <small>{formatCurrency(balance)}</small>
+              <strong>{formatCurrency(balance)}</strong>
             </div>
             <div className="balance-detail-grid">
               <span>
                 <small>Ingresos</small>
-                <b>{formatCompactCurrency(summary.income)}</b>
+                <b>{formatCurrency(summary.income)}</b>
               </span>
               <span>
                 <small>Gastos</small>
-                <b>{formatCompactCurrency(summary.expenses)}</b>
+                <b>{formatCurrency(summary.expenses)}</b>
               </span>
               <span>
                 <small>Movimientos</small>
@@ -480,17 +461,17 @@ export function ExpenseApp() {
           <article className="executive-metric paid">
             <CircleDollarSign size={20} />
             <span>Ingresos</span>
-            <strong title={formatCurrency(summary.income)}>{formatCompactCurrency(summary.income)}</strong>
+            <strong>{formatCurrency(summary.income)}</strong>
           </article>
           <article className="executive-metric fixed">
             <WalletCards size={20} />
             <span>Gastos fijos</span>
-            <strong title={formatCurrency(summary.fixed)}>{formatCompactCurrency(summary.fixed)}</strong>
+            <strong>{formatCurrency(summary.fixed)}</strong>
           </article>
           <article className="executive-metric variable">
             <WalletCards size={20} />
             <span>Gastos variables</span>
-            <strong title={formatCurrency(summary.variable)}>{formatCompactCurrency(summary.variable)}</strong>
+            <strong>{formatCurrency(summary.variable)}</strong>
           </article>
           <article className="executive-metric upcoming">
             <CalendarDays size={20} />
