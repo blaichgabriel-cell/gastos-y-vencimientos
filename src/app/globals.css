@@ -4,13 +4,13 @@
   --ink: #111827;
   --muted: #6b7280;
   --line: #d8dee8;
-  --brand: #0f766e;
-  --brand-dark: #115e59;
+  --brand: #123a5d;
+  --brand-dark: #0b1f3a;
   --paid: #17803d;
   --upcoming: #d97706;
   --overdue: #dc2626;
   --pending: #64748b;
-  --shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+  --shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 * {
@@ -81,8 +81,8 @@ button {
   margin: 0;
   color: var(--brand);
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -913,8 +913,8 @@ textarea {
   width: 44px;
   height: 44px;
   border-radius: 8px;
-  background: #0f766e;
-  font-weight: 900;
+  background: #123a5d;
+  font-weight: 800;
 }
 
 .brand-lockup strong,
@@ -999,7 +999,7 @@ textarea {
 
 .executive-topbar h1 {
   margin: 4px 0 0;
-  font-size: 34px;
+  font-size: 28px;
   letter-spacing: 0;
 }
 
@@ -1023,10 +1023,10 @@ textarea {
   min-height: 44px;
   border: 0;
   border-radius: 8px;
-  background: #0f766e;
+  background: #123a5d;
   color: #fff;
   padding: 0 16px;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .executive-overview {
@@ -1059,8 +1059,8 @@ textarea {
   align-items: stretch;
   gap: 12px;
   background:
-    radial-gradient(circle at top right, rgba(45, 212, 191, 0.2), transparent 36%),
-    linear-gradient(135deg, #0f172a, #164e63);
+    radial-gradient(circle at top right, rgba(47, 128, 237, 0.16), transparent 36%),
+    linear-gradient(135deg, #0b1f3a, #123a5d);
   color: #fff;
   padding: 24px;
 }
@@ -1080,7 +1080,7 @@ textarea {
 .executive-balance strong {
   display: block;
   margin: 10px 0 6px;
-  font-size: clamp(34px, 3.4vw, 52px);
+  font-size: clamp(30px, 3vw, 42px);
   line-height: 1;
   overflow-wrap: anywhere;
 }
@@ -1189,18 +1189,18 @@ textarea {
 }
 
 .executive-metric svg {
-  color: #0f766e;
+  color: #123a5d;
 }
 
 .executive-metric span {
   color: #64748b;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 .executive-metric strong {
-  font-size: clamp(20px, 1.45vw, 24px);
+  font-size: clamp(18px, 1.25vw, 22px);
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -1210,7 +1210,7 @@ textarea {
 }
 
 .executive-metric.fixed svg {
-  color: #0f766e;
+  color: #123a5d;
 }
 
 .executive-metric.upcoming svg {
@@ -1363,7 +1363,7 @@ textarea {
 }
 
 .fixed-dot {
-  background: #0f766e;
+  background: #123a5d;
 }
 
 .variable-dot {
@@ -1416,7 +1416,7 @@ textarea {
   height: 100%;
   min-width: 0;
   border-radius: inherit;
-  background: #0f766e;
+  background: #123a5d;
 }
 
 .income-bar {
@@ -1564,7 +1564,7 @@ textarea {
 
 .accounts-summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
@@ -2001,7 +2001,7 @@ textarea {
     left: 12px;
     z-index: 8;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     border: 1px solid #dbe2ea;
     border-radius: 8px;
@@ -2033,7 +2033,7 @@ textarea {
 
   .mobile-nav button:nth-child(5),
   .mobile-nav button.active {
-    background: #0f766e;
+    background: #123a5d;
     color: #fff;
   }
 
@@ -2062,7 +2062,7 @@ textarea {
 
 @media (max-width: 560px) {
   .executive-topbar h1 {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .executive-balance {

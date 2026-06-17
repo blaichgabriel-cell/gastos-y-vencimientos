@@ -26,7 +26,7 @@ create table if not exists public.financial_accounts (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   institution text,
-  account_type text not null check (account_type in ('bank', 'cash', 'savings', 'investment', 'credit_card', 'debt')),
+  account_type text not null check (account_type in ('bank', 'cash', 'savings', 'investment', 'receivable', 'credit_card', 'debt')),
   balance numeric(12, 2) not null default 0,
   credit_limit numeric(12, 2) not null default 0,
   credit_used numeric(12, 2) not null default 0,
@@ -57,6 +57,13 @@ add column if not exists account_id uuid references public.financial_accounts(id
 
 alter table public.expenses
 add column if not exists payment_target_account_id uuid references public.financial_accounts(id) on delete set null;
+
+alter table public.financial_accounts
+drop constraint if exists financial_accounts_account_type_check;
+
+alter table public.financial_accounts
+add constraint financial_accounts_account_type_check
+check (account_type in ('bank', 'cash', 'savings', 'investment', 'receivable', 'credit_card', 'debt'));
 
 update public.expenses
 set expense_kind = case when recurrence = 'monthly' then 'fixed' else 'variable' end

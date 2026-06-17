@@ -138,6 +138,7 @@ const accountTypeLabels: Record<FinancialAccountType, string> = {
   cash: "Efectivo",
   savings: "Ahorro",
   investment: "Inversion",
+  receivable: "Por cobrar",
   credit_card: "Tarjeta",
   debt: "Deuda"
 };
@@ -192,7 +193,7 @@ export function ExpenseApp() {
   const [kindFilter, setKindFilter] = useState<"all" | "fixed" | "variable">("all");
   const [category, setCategory] = useState("all");
   const [notice, setNotice] = useState("");
-  const [activeView, setActiveView] = useState<"panel" | "cuentas" | "balances" | "vencimientos" | "alertas">("panel");
+  const [activeView, setActiveView] = useState<"panel" | "cuentas" | "balances" | "movimientos">("panel");
   const savingRef = useRef(false);
   const loadRequestRef = useRef(0);
 
@@ -305,6 +306,7 @@ export function ExpenseApp() {
     const totals = new Map<string, number>();
     periodExpenses.forEach((expense) => {
       if (getTransactionType(expense) !== "expense") return;
+      if (getMovementKind(expense) === "card_payment") return;
       totals.set(expense.category, (totals.get(expense.category) ?? 0) + Number(expense.amount));
     });
 
@@ -400,13 +402,17 @@ export function ExpenseApp() {
       }
 
       if (item.account.account_type === "investment") acc.investments += item.balance;
+      else if (item.account.account_type === "receivable") acc.receivable += item.balance;
       else acc.available += item.balance;
       return acc;
     },
-    { available: 0, investments: 0, creditLimit: 0, creditUsed: 0, availableCredit: 0 }
+    { available: 0, investments: 0, receivable: 0, creditLimit: 0, creditUsed: 0, availableCredit: 0 }
   );
   const netWorth = accountsSummary.available + accountsSummary.investments - accountsSummary.creditUsed;
-  const assetAccounts = accounts.filter((account) => !isCreditAccount(account));
+  const estimatedNetWorth = netWorth + accountsSummary.receivable;
+  const liquidAccounts = accounts.filter((account) => account.account_type === "bank" || account.account_type === "cash" || account.account_type === "savings");
+  const investmentAccounts = accounts.filter((account) => account.account_type === "investment");
+  const receivableAccounts = accounts.filter((account) => account.account_type === "receivable");
   const creditAccounts = accounts.filter((account) => isCreditAccount(account));
 
   async function saveExpense(event: React.FormEvent) {
@@ -561,9 +567,9 @@ export function ExpenseApp() {
     else await loadExpenses();
   }
 
-  function openCreateAccountForm() {
+  function openCreateAccountForm(accountType: FinancialAccountType = "bank") {
     setEditingAccountId(null);
-    setAccountForm(createDefaultAccountForm());
+    setAccountForm({ ...createDefaultAccountForm(), account_type: accountType });
     setShowAccountForm(true);
   }
 
@@ -609,6 +615,7 @@ export function ExpenseApp() {
       }
 
       const isCredit = accountForm.account_type === "credit_card" || accountForm.account_type === "debt";
+      const usesExpectedDate = accountForm.account_type === "receivable";
       const payload = {
         user_id: userId,
         name: accountForm.name.trim(),
@@ -618,7 +625,7 @@ export function ExpenseApp() {
         credit_limit: isCredit ? parseGuaraniAmount(accountForm.credit_limit) : 0,
         credit_used: isCredit ? parseGuaraniAmount(accountForm.credit_used) : 0,
         statement_day: isCredit && accountForm.statement_day ? Number(accountForm.statement_day) : null,
-        due_day: isCredit && accountForm.due_day ? Number(accountForm.due_day) : null,
+        due_day: (isCredit || usesExpectedDate) && accountForm.due_day ? Number(accountForm.due_day) : null,
         notes: accountForm.notes.trim() || null,
         updated_at: new Date().toISOString()
       };
@@ -668,16 +675,22 @@ export function ExpenseApp() {
       const computed = getComputedStatus(expense);
       return computed === "due_today" || computed === "upcoming" || computed === "overdue";
     })
-    .slice(0, activeView === "alertas" ? 20 : 5);
+    .slice(0, 5);
   const hasPaymentAlerts = overdueCount > 0 || dueTodayCount > 0 || summary.upcoming > 0;
-  const showMoneyDashboard = activeView !== "balances" && activeView !== "cuentas";
+  const showPanelSummary = activeView === "panel";
+  const showMovementTools = activeView === "panel" || activeView === "movimientos";
 
   const viewCopy = {
     panel: "Situacion completa del periodo seleccionado.",
     cuentas: "Bancos, efectivo, ahorros, tarjetas y patrimonio neto.",
     balances: "Cierre automatico por mes y comparacion mensual.",
-    vencimientos: "Gestiona tus pagos, estados y fechas.",
-    alertas: "Prioridad de vencimientos cercanos o atrasados."
+    movimientos: "Ingresos, gastos, pagos de tarjeta y transferencias."
+  };
+  const viewTitle = {
+    panel: "Panel",
+    cuentas: "Cuentas",
+    balances: "Balances",
+    movimientos: "Movimientos"
   };
 
   return (
@@ -700,11 +713,8 @@ export function ExpenseApp() {
           <button className={activeView === "balances" ? "active" : ""} onClick={() => setActiveView("balances")} type="button">
             <BarChart3 size={18} /> Balances
           </button>
-          <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
-            <CalendarDays size={18} /> Vencimientos
-          </button>
-          <button className={activeView === "alertas" ? "active" : ""} onClick={() => setActiveView("alertas")} type="button">
-            <AlertTriangle size={18} /> Alertas
+          <button className={activeView === "movimientos" ? "active" : ""} onClick={() => setActiveView("movimientos")} type="button">
+            <CalendarDays size={18} /> Movimientos
           </button>
         </nav>
         <div className="side-account">
@@ -718,20 +728,26 @@ export function ExpenseApp() {
         <header className="executive-topbar">
           <div>
             <p className="eyebrow">Panel ejecutivo</p>
-            <h1>Situacion del mes</h1>
+            <h1>{viewTitle[activeView]}</h1>
             <span className="view-subtitle">{viewCopy[activeView]}</span>
           </div>
           <div className="executive-actions">
             <button className="icon-button" onClick={enableNotifications} title="Activar notificaciones" type="button">
               <Bell size={20} />
             </button>
-            <button className="executive-primary" onClick={openCreateForm} type="button">
-              <Plus size={18} /> Agregar movimiento
-            </button>
+            {activeView === "cuentas" ? (
+              <button className="executive-primary" onClick={() => openCreateAccountForm("bank")} type="button">
+                <Plus size={18} /> Agregar cuenta
+              </button>
+            ) : (
+              <button className="executive-primary" onClick={openCreateForm} type="button">
+                <Plus size={18} /> Agregar movimiento
+              </button>
+            )}
           </div>
         </header>
 
-        {showMoneyDashboard ? (
+        {showPanelSummary ? (
         <>
         <section className="executive-overview" id="resumen">
           <article className={`executive-balance ${balanceTone}`}>
@@ -846,6 +862,10 @@ export function ExpenseApp() {
                 <span>Inversiones</span>
                 <strong>{formatCurrency(accountsSummary.investments)}</strong>
               </article>
+              <article className="executive-card account-summary-card">
+                <span>Por cobrar</span>
+                <strong>{formatCurrency(accountsSummary.receivable)}</strong>
+              </article>
               <article className="executive-card account-summary-card debt">
                 <span>Deuda tarjetas</span>
                 <strong>{formatCurrency(accountsSummary.creditUsed)}</strong>
@@ -858,6 +878,10 @@ export function ExpenseApp() {
                 <span>Patrimonio neto</span>
                 <strong>{formatCurrency(netWorth)}</strong>
               </article>
+              <article className={`executive-card account-summary-card ${estimatedNetWorth >= 0 ? "positive" : "negative"}`}>
+                <span>Patrimonio estimado</span>
+                <strong>{formatCurrency(estimatedNetWorth)}</strong>
+              </article>
             </section>
 
             <section className="accounts-layout">
@@ -867,11 +891,11 @@ export function ExpenseApp() {
                     <p className="eyebrow">Plata real</p>
                     <h2>Bancos y ahorros</h2>
                   </div>
-                  <button className="small-action" onClick={openCreateAccountForm} type="button"><Plus size={16} /> Nueva</button>
+                  <button className="small-action" onClick={() => openCreateAccountForm("bank")} type="button"><Plus size={16} /> Banco</button>
                 </div>
                 <div className="account-list">
-                  {assetAccounts.length === 0 ? <p className="empty-side">Agrega tus bancos, efectivo o ahorros.</p> : null}
-                  {accountSnapshots.filter((item) => !isCreditAccount(item.account)).map((item) => (
+                  {liquidAccounts.length === 0 ? <p className="empty-side">Agrega tus bancos, efectivo o ahorros.</p> : null}
+                  {accountSnapshots.filter((item) => item.account.account_type === "bank" || item.account.account_type === "cash" || item.account.account_type === "savings").map((item) => (
                     <article className="account-row" key={item.account.id}>
                       <div>
                         <strong>{item.account.name}</strong>
@@ -893,7 +917,7 @@ export function ExpenseApp() {
                     <p className="eyebrow">Credito</p>
                     <h2>Tarjetas y deudas</h2>
                   </div>
-                  <button className="small-action" onClick={openCreateAccountForm} type="button"><Plus size={16} /> Nueva</button>
+                  <button className="small-action" onClick={() => openCreateAccountForm("credit_card")} type="button"><Plus size={16} /> Tarjeta</button>
                 </div>
                 <div className="account-list">
                   {creditAccounts.length === 0 ? <p className="empty-side">Agrega tus tarjetas de credito o deudas.</p> : null}
@@ -908,6 +932,59 @@ export function ExpenseApp() {
                         <b>{formatCurrency(item.debt)}</b>
                         <span>Disponible {formatCurrency(item.availableCredit)}</span>
                       </div>
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => startEditAccount(item.account)} title="Editar" type="button"><Edit2 size={18} /></button>
+                        <button className="icon-button danger" onClick={() => deleteAccount(item.account.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+
+              <article className="executive-card">
+                <div className="card-heading">
+                  <div>
+                    <p className="eyebrow">Crecimiento</p>
+                    <h2>Inversiones</h2>
+                  </div>
+                  <button className="small-action" onClick={() => openCreateAccountForm("investment")} type="button"><Plus size={16} /> Inversion</button>
+                </div>
+                <div className="account-list">
+                  {investmentAccounts.length === 0 ? <p className="empty-side">Agrega tus inversiones para sumarlas al patrimonio.</p> : null}
+                  {accountSnapshots.filter((item) => item.account.account_type === "investment").map((item) => (
+                    <article className="account-row investment" key={item.account.id}>
+                      <div>
+                        <strong>{item.account.name}</strong>
+                        <span>{item.account.institution || "Inversion"}</span>
+                      </div>
+                      <b>{formatCurrency(item.balance)}</b>
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => startEditAccount(item.account)} title="Editar" type="button"><Edit2 size={18} /></button>
+                        <button className="icon-button danger" onClick={() => deleteAccount(item.account.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+
+              <article className="executive-card">
+                <div className="card-heading">
+                  <div>
+                    <p className="eyebrow">Pendiente</p>
+                    <h2>Por cobrar</h2>
+                  </div>
+                  <button className="small-action" onClick={() => openCreateAccountForm("receivable")} type="button"><Plus size={16} /> Por cobrar</button>
+                </div>
+                <div className="account-list">
+                  {receivableAccounts.length === 0 ? <p className="empty-side">Agrega personas o conceptos que te deben plata.</p> : null}
+                  {accountSnapshots.filter((item) => item.account.account_type === "receivable").map((item) => (
+                    <article className="account-row receivable" key={item.account.id}>
+                      <div>
+                        <strong>{item.account.name}</strong>
+                        <span>{item.account.institution || "Por cobrar"}</span>
+                        <small>{item.account.due_day ? `Cobro estimado dia ${item.account.due_day}` : "Sin fecha estimada"}</small>
+                      </div>
+                      <b>{formatCurrency(item.balance)}</b>
                       <div className="row-actions">
                         <button className="icon-button" onClick={() => startEditAccount(item.account)} title="Editar" type="button"><Edit2 size={18} /></button>
                         <button className="icon-button danger" onClick={() => deleteAccount(item.account.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
@@ -1086,7 +1163,7 @@ export function ExpenseApp() {
           </section>
         ) : null}
 
-        {showMoneyDashboard && hasPaymentAlerts ? (
+        {showPanelSummary && hasPaymentAlerts ? (
           <section className={`internal-alert ${overdueCount > 0 ? "danger" : dueTodayCount > 0 ? "today" : "upcoming"}`}>
             <div>
               <strong>
@@ -1098,15 +1175,15 @@ export function ExpenseApp() {
               </strong>
               <span>Revisa tus vencimientos para evitar atrasos.</span>
             </div>
-            <button onClick={() => setActiveView("alertas")} type="button">
-              Ver alertas
+            <button onClick={() => setActiveView("movimientos")} type="button">
+              Ver movimientos
             </button>
           </section>
         ) : null}
 
-        {showMoneyDashboard ? (
+        {showMovementTools ? (
         <section className={`executive-content view-${activeView}`}>
-          {(activeView === "panel" || activeView === "vencimientos") ? (
+          {(activeView === "panel" || activeView === "movimientos") ? (
           <article className="executive-card table-card" id="vencimientos">
             <div className="card-heading">
               <div>
@@ -1168,7 +1245,7 @@ export function ExpenseApp() {
           </article>
           ) : null}
 
-          {(activeView === "panel" || activeView === "alertas") ? (
+          {activeView === "panel" ? (
           <aside className="executive-card right-card" id="alertas">
             <div className="card-heading">
               <div>
@@ -1247,9 +1324,9 @@ export function ExpenseApp() {
                 </button>
               </div>
               <form className="executive-form" onSubmit={saveAccount} autoComplete="off">
-                <label>Tipo<select value={accountForm.account_type} onChange={(e) => setAccountForm({ ...accountForm, account_type: e.target.value as FinancialAccountType })}><option value="bank">Banco</option><option value="cash">Efectivo</option><option value="savings">Ahorro</option><option value="investment">Inversion</option><option value="credit_card">Tarjeta de credito</option><option value="debt">Deuda</option></select></label>
-                <label>Nombre<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Ej. Ueno, Visa Itaú" required /></label>
-                <label>Banco / entidad<input value={accountForm.institution} onChange={(e) => setAccountForm({ ...accountForm, institution: e.target.value })} placeholder="Opcional" /></label>
+                <label>Tipo<select value={accountForm.account_type} onChange={(e) => setAccountForm({ ...accountForm, account_type: e.target.value as FinancialAccountType })}><option value="bank">Banco</option><option value="cash">Efectivo</option><option value="savings">Ahorro</option><option value="investment">Inversion</option><option value="receivable">Por cobrar</option><option value="credit_card">Tarjeta de credito</option><option value="debt">Deuda</option></select></label>
+                <label>Nombre<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Ej. Ueno, Visa Itau, Juan me debe" required /></label>
+                <label>{accountForm.account_type === "receivable" ? "Persona / concepto" : "Banco / entidad"}<input value={accountForm.institution} onChange={(e) => setAccountForm({ ...accountForm, institution: e.target.value })} placeholder="Opcional" /></label>
                 {accountForm.account_type === "credit_card" || accountForm.account_type === "debt" ? (
                   <>
                     <label>Limite<input inputMode="numeric" value={accountForm.credit_limit} onBlur={(e) => setAccountForm({ ...accountForm, credit_limit: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, credit_limit: e.target.value })} placeholder="0" /></label>
@@ -1258,7 +1335,12 @@ export function ExpenseApp() {
                     <label>Dia de vencimiento<input inputMode="numeric" max="31" min="1" type="number" value={accountForm.due_day} onChange={(e) => setAccountForm({ ...accountForm, due_day: e.target.value })} /></label>
                   </>
                 ) : (
-                  <label>Saldo actual<input inputMode="numeric" value={accountForm.balance} onBlur={(e) => setAccountForm({ ...accountForm, balance: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="0" /></label>
+                  <>
+                    <label>{accountForm.account_type === "receivable" ? "Monto por cobrar" : "Saldo actual"}<input inputMode="numeric" value={accountForm.balance} onBlur={(e) => setAccountForm({ ...accountForm, balance: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="0" /></label>
+                    {accountForm.account_type === "receivable" ? (
+                      <label>Dia estimado de cobro<input inputMode="numeric" max="31" min="1" type="number" value={accountForm.due_day} onChange={(e) => setAccountForm({ ...accountForm, due_day: e.target.value })} /></label>
+                    ) : null}
+                  </>
                 )}
                 <label className="full">Notas<textarea value={accountForm.notes} onChange={(e) => setAccountForm({ ...accountForm, notes: e.target.value })} rows={3} /></label>
                 <button className="primary-button full" disabled={savingAccount} type="submit">{savingAccount ? "Guardando..." : "Guardar cuenta"}</button>
@@ -1277,13 +1359,10 @@ export function ExpenseApp() {
           <button className={activeView === "balances" ? "active" : ""} onClick={() => setActiveView("balances")} type="button">
             <BarChart3 size={18} /> Balance
           </button>
-          <button className={activeView === "vencimientos" ? "active" : ""} onClick={() => setActiveView("vencimientos")} type="button">
-            <CalendarDays size={18} /> Vence
+          <button className={activeView === "movimientos" ? "active" : ""} onClick={() => setActiveView("movimientos")} type="button">
+            <CalendarDays size={18} /> Mov.
           </button>
           <button onClick={openCreateForm} type="button"><Plus size={18} /> Agregar</button>
-          <button className={activeView === "alertas" ? "active" : ""} onClick={() => setActiveView("alertas")} type="button">
-            <Bell size={18} /> Alertas
-          </button>
         </nav>
       </section>
     </main>

@@ -3,7 +3,7 @@ export type ExpenseRecurrence = "none" | "monthly";
 export type TransactionType = "expense" | "income";
 export type ExpenseKind = "fixed" | "variable";
 export type MovementKind = "normal" | "card_payment";
-export type FinancialAccountType = "bank" | "cash" | "savings" | "investment" | "credit_card" | "debt";
+export type FinancialAccountType = "bank" | "cash" | "savings" | "investment" | "receivable" | "credit_card" | "debt";
 
 export type Expense = {
   id: string;
