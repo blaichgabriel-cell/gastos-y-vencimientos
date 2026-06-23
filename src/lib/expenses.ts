@@ -51,6 +51,8 @@ export type FinancialAccount = {
   credit_used: number;
   statement_day: number | null;
   due_day: number | null;
+  receivable_due_date: string | null;
+  settled_at: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -65,6 +67,7 @@ export type FinancialAccountInput = {
   credit_used: string;
   statement_day: string;
   due_day: string;
+  receivable_due_date: string;
   notes: string;
 };
 

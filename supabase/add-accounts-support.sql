@@ -9,6 +9,8 @@ create table if not exists public.financial_accounts (
   credit_used numeric(12, 2) not null default 0,
   statement_day int check (statement_day is null or (statement_day >= 1 and statement_day <= 31)),
   due_day int check (due_day is null or (due_day >= 1 and due_day <= 31)),
+  receivable_due_date date,
+  settled_at timestamptz,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -23,6 +25,35 @@ add column if not exists account_id uuid references public.financial_accounts(id
 
 alter table public.expenses
 add column if not exists payment_target_account_id uuid references public.financial_accounts(id) on delete set null;
+
+alter table public.financial_accounts
+add column if not exists receivable_due_date date;
+
+alter table public.financial_accounts
+add column if not exists settled_at timestamptz;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'expenses_account_id_fkey'
+      and conrelid = 'public.expenses'::regclass
+  ) then
+    alter table public.expenses
+    add constraint expenses_account_id_fkey
+    foreign key (account_id) references public.financial_accounts(id) on delete set null not valid;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'expenses_payment_target_account_id_fkey'
+      and conrelid = 'public.expenses'::regclass
+  ) then
+    alter table public.expenses
+    add constraint expenses_payment_target_account_id_fkey
+    foreign key (payment_target_account_id) references public.financial_accounts(id) on delete set null not valid;
+  end if;
+end $$;
 
 alter table public.financial_accounts
 drop constraint if exists financial_accounts_account_type_check;
@@ -53,6 +84,38 @@ drop policy if exists "Users can delete own financial accounts" on public.financ
 create policy "Users can delete own financial accounts"
 on public.financial_accounts for delete
 using (auth.uid() = user_id);
+
+create or replace function public.ensure_expense_accounts_belong_to_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.account_id is not null and not exists (
+    select 1 from public.financial_accounts
+    where id = new.account_id and user_id = new.user_id
+  ) then
+    raise exception 'La cuenta origen no pertenece al usuario.';
+  end if;
+
+  if new.payment_target_account_id is not null and not exists (
+    select 1 from public.financial_accounts
+    where id = new.payment_target_account_id and user_id = new.user_id
+  ) then
+    raise exception 'La cuenta destino no pertenece al usuario.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists ensure_expense_accounts_belong_to_user_trigger on public.expenses;
+create trigger ensure_expense_accounts_belong_to_user_trigger
+before insert or update of user_id, account_id, payment_target_account_id
+on public.expenses
+for each row
+execute function public.ensure_expense_accounts_belong_to_user();
 
 create index if not exists expenses_user_account_idx
 on public.expenses (user_id, account_id);

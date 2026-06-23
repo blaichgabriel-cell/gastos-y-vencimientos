@@ -61,6 +61,7 @@ function createDefaultAccountForm(): FinancialAccountInput {
     credit_used: "",
     statement_day: "",
     due_day: "",
+    receivable_due_date: "",
     notes: ""
   };
 }
@@ -86,6 +87,18 @@ function formatGuaraniInput(value: string | number) {
   return new Intl.NumberFormat("es-PY", {
     maximumFractionDigits: 0
   }).format(amount);
+}
+
+function parseOptionalGuaraniAmount(value: string, fallback: number) {
+  return value.trim() ? parseGuaraniAmount(value) : fallback;
+}
+
+function isLiquidAccount(account: FinancialAccount | undefined) {
+  return account?.account_type === "bank" || account?.account_type === "cash" || account?.account_type === "savings";
+}
+
+function isReceivableOpen(account: FinancialAccount) {
+  return account.account_type === "receivable" && Number(account.balance ?? 0) > 0 && !account.settled_at;
 }
 
 function createDefaultForm(): ExpenseForm {
@@ -366,6 +379,7 @@ export function ExpenseApp() {
         const transactionType = getTransactionType(expense);
 
         if (movementKind === "card_payment") {
+          if (!expense.paid_at) return;
           if (expense.account_id === account.id && !isCreditAccount(account)) projectedBalance -= amount;
           if (expense.payment_target_account_id === account.id && isCreditAccount(account)) projectedDebt -= amount;
           return;
@@ -410,7 +424,7 @@ export function ExpenseApp() {
   );
   const netWorth = accountsSummary.available + accountsSummary.investments - accountsSummary.creditUsed;
   const estimatedNetWorth = netWorth + accountsSummary.receivable;
-  const liquidAccounts = accounts.filter((account) => account.account_type === "bank" || account.account_type === "cash" || account.account_type === "savings");
+  const liquidAccounts = accounts.filter(isLiquidAccount);
   const investmentAccounts = accounts.filter((account) => account.account_type === "investment");
   const receivableAccounts = accounts.filter((account) => account.account_type === "receivable");
   const creditAccounts = accounts.filter((account) => isCreditAccount(account));
@@ -444,20 +458,47 @@ export function ExpenseApp() {
       const now = new Date().toISOString();
       const isIncome = form.transaction_type === "income";
       const movementKind = isIncome ? "normal" : form.movement_kind;
+      const isCardPayment = movementKind === "card_payment";
+      const sourceAccount = form.account_id ? accounts.find((account) => account.id === form.account_id) : undefined;
+      const targetAccount = form.payment_target_account_id ? accounts.find((account) => account.id === form.payment_target_account_id) : undefined;
 
-      if (movementKind === "card_payment" && (!form.account_id || !form.payment_target_account_id)) {
+      if (isCardPayment && (!sourceAccount || !targetAccount)) {
         setNotice("Para pagar una tarjeta elegi la cuenta de origen y la tarjeta destino.");
+        return;
+      }
+
+      if (isCardPayment && !isLiquidAccount(sourceAccount)) {
+        setNotice("El origen del pago debe ser un banco, ahorro o efectivo.");
+        return;
+      }
+
+      if (isCardPayment && !isCreditAccount(targetAccount)) {
+        setNotice("El destino del pago debe ser una tarjeta o deuda.");
+        return;
+      }
+
+      if (isCardPayment && sourceAccount?.id === targetAccount?.id) {
+        setNotice("La cuenta de origen y la tarjeta destino no pueden ser iguales.");
+        return;
+      }
+
+      if (!isCardPayment && sourceAccount?.account_type === "receivable") {
+        setNotice("Para dinero por cobrar usa la seccion Cuentas, no un movimiento normal.");
         return;
       }
 
       const nextStatus: ExpenseStatus = isIncome
         ? "paid"
-        : existing && !changedType
+        : isCardPayment && !existing
+          ? "paid"
+          : existing && !changedType
           ? existing.status
           : "pending";
       const nextPaidAt = isIncome
         ? existing?.paid_at ?? now
-        : existing && !changedType
+        : isCardPayment && !existing
+          ? now
+          : existing && !changedType
           ? existing.paid_at
           : null;
 
@@ -468,7 +509,7 @@ export function ExpenseApp() {
         expense_kind: isIncome ? null : form.expense_kind,
         movement_kind: movementKind,
         account_id: form.account_id || null,
-        payment_target_account_id: movementKind === "card_payment" ? form.payment_target_account_id : null,
+        payment_target_account_id: isCardPayment ? form.payment_target_account_id : null,
         client_token: existing?.client_token ?? form.client_token,
         category: form.category,
         due_date: form.due_date,
@@ -562,6 +603,8 @@ export function ExpenseApp() {
   }
 
   async function deleteExpense(id: string) {
+    const confirmed = window.confirm("Eliminar este movimiento? Esta accion no se puede deshacer.");
+    if (!confirmed) return;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) setNotice(error.message);
     else await loadExpenses();
@@ -590,6 +633,7 @@ export function ExpenseApp() {
       credit_used: formatGuaraniInput(Number(account.credit_used ?? 0)),
       statement_day: account.statement_day ? String(account.statement_day) : "",
       due_day: account.due_day ? String(account.due_day) : "",
+      receivable_due_date: account.receivable_due_date ?? "",
       notes: account.notes ?? ""
     });
     setShowAccountForm(true);
@@ -616,16 +660,26 @@ export function ExpenseApp() {
 
       const isCredit = accountForm.account_type === "credit_card" || accountForm.account_type === "debt";
       const usesExpectedDate = accountForm.account_type === "receivable";
+      const existingAccount = editingAccountId ? accounts.find((account) => account.id === editingAccountId) : null;
+      if (existingAccount && existingAccount.account_type !== accountForm.account_type) {
+        const confirmed = window.confirm("Cambiar el tipo de cuenta puede reiniciar campos que no correspondan. Queres continuar?");
+        if (!confirmed) return;
+      }
+      const nextBalance = isCredit ? 0 : parseOptionalGuaraniAmount(accountForm.balance, Number(existingAccount?.balance ?? 0));
+      const nextCreditLimit = isCredit ? parseOptionalGuaraniAmount(accountForm.credit_limit, Number(existingAccount?.credit_limit ?? 0)) : 0;
+      const nextCreditUsed = isCredit ? parseOptionalGuaraniAmount(accountForm.credit_used, Number(existingAccount?.credit_used ?? 0)) : 0;
       const payload = {
         user_id: userId,
         name: accountForm.name.trim(),
         institution: accountForm.institution.trim() || null,
         account_type: accountForm.account_type,
-        balance: isCredit ? 0 : parseGuaraniAmount(accountForm.balance),
-        credit_limit: isCredit ? parseGuaraniAmount(accountForm.credit_limit) : 0,
-        credit_used: isCredit ? parseGuaraniAmount(accountForm.credit_used) : 0,
+        balance: nextBalance,
+        credit_limit: nextCreditLimit,
+        credit_used: nextCreditUsed,
         statement_day: isCredit && accountForm.statement_day ? Number(accountForm.statement_day) : null,
-        due_day: (isCredit || usesExpectedDate) && accountForm.due_day ? Number(accountForm.due_day) : null,
+        due_day: isCredit && accountForm.due_day ? Number(accountForm.due_day) : null,
+        receivable_due_date: usesExpectedDate && accountForm.receivable_due_date ? accountForm.receivable_due_date : null,
+        settled_at: usesExpectedDate && nextBalance <= 0 ? existingAccount?.settled_at ?? new Date().toISOString() : null,
         notes: accountForm.notes.trim() || null,
         updated_at: new Date().toISOString()
       };
@@ -650,9 +704,30 @@ export function ExpenseApp() {
   }
 
   async function deleteAccount(id: string) {
+    const confirmed = window.confirm("Eliminar esta cuenta, tarjeta o registro por cobrar? Esta accion no se puede deshacer.");
+    if (!confirmed) return;
     const { error } = await supabase.from("financial_accounts").delete().eq("id", id);
     if (error) setNotice(error.message);
     else await loadAccounts();
+  }
+
+  async function settleReceivable(account: FinancialAccount) {
+    if (!isReceivableOpen(account)) return;
+    const confirmed = window.confirm("Marcar este monto como cobrado? El saldo por cobrar quedara en cero.");
+    if (!confirmed) return;
+    const { error } = await supabase
+      .from("financial_accounts")
+      .update({
+        balance: 0,
+        settled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", account.id);
+    if (error) setNotice(error.message);
+    else {
+      await loadAccounts();
+      setNotice("Monto marcado como cobrado.");
+    }
   }
 
   async function enableNotifications() {
@@ -692,6 +767,9 @@ export function ExpenseApp() {
     balances: "Balances",
     movimientos: "Movimientos"
   };
+  const movementSourceAccounts = form.movement_kind === "card_payment"
+    ? liquidAccounts
+    : accounts.filter((account) => account.account_type !== "receivable" && account.account_type !== "debt");
 
   return (
     <main className="executive-shell">
@@ -982,10 +1060,19 @@ export function ExpenseApp() {
                       <div>
                         <strong>{item.account.name}</strong>
                         <span>{item.account.institution || "Por cobrar"}</span>
-                        <small>{item.account.due_day ? `Cobro estimado dia ${item.account.due_day}` : "Sin fecha estimada"}</small>
+                        <small>
+                          {item.account.settled_at
+                            ? `Cobrado el ${new Date(item.account.settled_at).toLocaleDateString("es-PY")}`
+                            : item.account.receivable_due_date
+                              ? `Cobro estimado ${new Date(`${item.account.receivable_due_date}T00:00:00`).toLocaleDateString("es-PY")}`
+                              : "Sin fecha estimada"}
+                        </small>
                       </div>
                       <b>{formatCurrency(item.balance)}</b>
                       <div className="row-actions">
+                        {isReceivableOpen(item.account) ? (
+                          <button className="icon-button" onClick={() => settleReceivable(item.account)} title="Marcar cobrado" type="button"><Check size={18} /></button>
+                        ) : null}
                         <button className="icon-button" onClick={() => startEditAccount(item.account)} title="Editar" type="button"><Edit2 size={18} /></button>
                         <button className="icon-button danger" onClick={() => deleteAccount(item.account.id)} title="Eliminar" type="button"><Trash2 size={18} /></button>
                       </div>
@@ -1286,16 +1373,16 @@ export function ExpenseApp() {
                 </button>
               </div>
               <form className="executive-form" onSubmit={saveExpense} autoComplete="off">
-                <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", movement_kind: "normal", payment_target_account_id: "", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
+                <label>Tipo<select value={form.transaction_type} onChange={(e) => setForm({ ...form, transaction_type: e.target.value as "expense" | "income", movement_kind: "normal", account_id: "", payment_target_account_id: "", category: e.target.value === "income" ? "Sueldo" : "Servicios" })}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
                 {form.transaction_type === "expense" ? (
-                  <label>Operacion<select value={form.movement_kind} onChange={(e) => setForm({ ...form, movement_kind: e.target.value as MovementKind })}><option value="normal">Gasto normal</option><option value="card_payment">Pago de tarjeta</option></select></label>
+                  <label>Operacion<select value={form.movement_kind} onChange={(e) => setForm({ ...form, movement_kind: e.target.value as MovementKind, account_id: "", payment_target_account_id: "" })}><option value="normal">Gasto normal</option><option value="card_payment">Pago de tarjeta</option></select></label>
                 ) : null}
                 {form.transaction_type === "expense" ? (
                   <label>Clase<select value={form.expense_kind} onChange={(e) => setForm({ ...form, expense_kind: e.target.value as ExpenseKind })}><option value="variable">Variable / ocasional</option><option value="fixed">Fijo</option></select></label>
                 ) : null}
-                <label>{form.movement_kind === "card_payment" ? "Cuenta origen" : "Cuenta / tarjeta"}<select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}><option value="">Sin cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} / {accountTypeLabels[account.account_type]}</option>)}</select></label>
+                <label>{form.movement_kind === "card_payment" ? "Cuenta origen" : "Cuenta / tarjeta"}<select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}><option value="">Sin cuenta</option>{movementSourceAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} / {accountTypeLabels[account.account_type]}</option>)}</select></label>
                 {form.transaction_type === "expense" && form.movement_kind === "card_payment" ? (
-                  <label>Tarjeta destino<select value={form.payment_target_account_id} onChange={(e) => setForm({ ...form, payment_target_account_id: e.target.value })}><option value="">Elegir tarjeta</option>{accounts.filter((account) => isCreditAccount(account)).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+                  <label>Tarjeta destino<select value={form.payment_target_account_id} onChange={(e) => setForm({ ...form, payment_target_account_id: e.target.value })}><option value="">Elegir tarjeta</option>{creditAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
                 ) : null}
                 <label>Nombre<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
                 <label>Monto<input autoComplete="off" inputMode="numeric" name="movement_amount" placeholder="0" value={form.amount} onBlur={(e) => setForm({ ...form, amount: formatGuaraniInput(e.target.value) })} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></label>
@@ -1338,7 +1425,7 @@ export function ExpenseApp() {
                   <>
                     <label>{accountForm.account_type === "receivable" ? "Monto por cobrar" : "Saldo actual"}<input inputMode="numeric" value={accountForm.balance} onBlur={(e) => setAccountForm({ ...accountForm, balance: formatGuaraniInput(e.target.value) })} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="0" /></label>
                     {accountForm.account_type === "receivable" ? (
-                      <label>Dia estimado de cobro<input inputMode="numeric" max="31" min="1" type="number" value={accountForm.due_day} onChange={(e) => setAccountForm({ ...accountForm, due_day: e.target.value })} /></label>
+                      <label>Fecha estimada de cobro<input type="date" value={accountForm.receivable_due_date} onChange={(e) => setAccountForm({ ...accountForm, receivable_due_date: e.target.value })} /></label>
                     ) : null}
                   </>
                 )}

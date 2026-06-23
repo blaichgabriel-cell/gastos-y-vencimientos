@@ -1,6 +1,6 @@
-# Gastos y Vencimientos
+# Mi Balance
 
-App web mobile-first para controlar gastos, fechas de vencimiento y pagos por usuario. Está preparada para Next.js, Supabase, Vercel, PWA y futuras notificaciones push.
+App web mobile-first para controlar ingresos, gastos, tarjetas, bancos, saldos, balances mensuales y vencimientos por usuario.
 
 ## Stack
 
@@ -27,6 +27,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
 
 3. En Supabase, abre SQL Editor y ejecuta `supabase/schema.sql`.
 
+Si ya tenias una version anterior de la app, ejecuta el SQL actualizado para agregar cuentas por cobrar, estado de cobro y protecciones entre cuentas y movimientos.
+
 4. Inicia el proyecto:
 
 ```bash
@@ -37,12 +39,12 @@ npm run dev
 
 1. Sube este proyecto a GitHub.
 2. Crea un proyecto en Vercel importando el repo.
-3. Agrega las variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+3. Agrega las variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` o `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 4. En Supabase Auth, agrega las URLs de Vercel en Authentication > URL Configuration.
 
 ## Notificaciones push
 
-La PWA ya registra un service worker y pide permiso de notificaciones desde el dashboard. El siguiente paso es implementar Web Push completo:
+La PWA ya registra un service worker y puede pedir permiso de notificaciones desde el dashboard. Para Web Push real todavia falta:
 
 - Generar VAPID keys.
 - Guardar subscriptions reales en `push_subscriptions`.
